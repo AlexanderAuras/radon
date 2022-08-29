@@ -3,7 +3,7 @@ import typing
 import torch
 import torch.utils.cpp_extension
 
-from radon.radon_cuda import *
+from radon.radon_functional import radon_forward, radon_backward
 
 
 
