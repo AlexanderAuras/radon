@@ -1,0 +1,8 @@
+#pragma once
+#ifndef RADON_FILTERS_HPP
+#define RADON_FILTERS_HPP
+
+#define RADON_RAM_LAK_FILTER_ID 0
+#define RADON_HANN_FILTER_ID 1
+
+#endif//RADON_FILTERS_HPP

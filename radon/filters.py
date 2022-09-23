@@ -3,7 +3,7 @@ import abc
 import torch
 import torch.utils.cpp_extension
 
-from radon.radon_cuda import _cuda_impl
+from radon.radon_impl import _impl
 
 
 
@@ -13,8 +13,8 @@ class Filter(abc.ABC):
         return torch.tensor([])
     
     @abc.abstractclassmethod
-    def _cuda_ptr(cls) -> int:
-        return 0
+    def _cuda_id(cls) -> int:
+        return -1
 
 
 
@@ -24,8 +24,8 @@ class RamLakFilter(Filter):
         return x
     
     @classmethod
-    def _cuda_ptr(cls) -> int:
-        return _cuda_impl._ram_lak_filter_ptr
+    def _cuda_id(cls) -> int:
+        return _impl._RAM_LAK_FILTER_ID
 
 
 
@@ -35,5 +35,5 @@ class HannFilter(Filter):
         return x
     
     @classmethod
-    def _cuda_ptr(cls) -> int:
-        return _cuda_impl._hann_filter_ptr
+    def _cuda_id(cls) -> int:
+        return _impl._HANN_FILTER_ID
