@@ -16,14 +16,14 @@ def radon_forward(image: torch.Tensor, angles: torch.Tensor|None = None, positio
     assert image.shape[2] == image.shape[3], "'image' must be square"
 
     if angles == None:
-        angles = torch.linspace(0.0, 3.14159265359, 256, device=image.device)
+        angles = torch.linspace(0.0, 3.14159265359, 257, device=image.device)[:-1]
     assert angles.is_contiguous(), "'angles' must be contigous"
     assert angles.dtype == torch.float32 or angles.dtype == torch.float64, "'angles' must be a float tensor"
     assert angles.dim() == 1, "'angles' must have one dimension"
     angles %= 3.14159265359
 
     if positions == None:
-        positions = torch.arange(0.0, image.shape[2]*1.41421356237+1, device=image.device)-(image.shape[2]*1.41421356237)//2
+        positions = torch.arange(0.0, image.shape[2]*1.41421356237, device=image.device)-(image.shape[2]*1.41421356237)//2
     assert positions.is_contiguous(), "'positions' must be contigous"
     assert positions.dtype == torch.float32 or positions.dtype == torch.float64, "'positions' must be a float tensor"
     assert positions.dim() == 1, "'positions' must have one dimension"
@@ -42,7 +42,7 @@ def radon_backward(sinogram: torch.Tensor, image_size: int, angles: torch.Tensor
     assert sinogram.shape[1] == 1, "'sinogram' must have exactly one channel"
 
     if angles == None:
-        angles = torch.linspace(0.0, 3.14159265359, 256, device=sinogram.device)
+        angles = torch.linspace(0.0, 3.14159265359, 257, device=sinogram.device)[:-1]
     assert angles.is_contiguous(), "'angles' must be contigous"
     assert angles.dtype == torch.float32 or angles.dtype == torch.float64, "'angles' must be a float tensor"
     assert angles.dim() == 1, "'angles' must have one dimension"
@@ -50,7 +50,7 @@ def radon_backward(sinogram: torch.Tensor, image_size: int, angles: torch.Tensor
     angles %= 3.14159265359
 
     if positions == None:
-        positions = torch.arange(0.0, image_size*1.41421356237+1, device=sinogram.device)-(image_size*1.41421356237)//2
+        positions = torch.arange(0.0, image_size*1.41421356237, device=sinogram.device)-(image_size*1.41421356237)//2
     assert positions.is_contiguous(), "'positions' must be contigous"
     assert positions.dtype == torch.float32 or positions.dtype == torch.float64, "'positions' must be a float tensor"
     assert positions.dim() == 1, "'positions' must have one dimension"
