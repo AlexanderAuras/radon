@@ -7,8 +7,9 @@
 #define PI 3.14159265359f
 #define PI_HALF 1.57079632679f
 #define FLOAT_CMP_THRESHOLD 0.001f
+#define CLAMP(x, mi, ma) x<mi?mi:(x<ma?x:ma)
 
-#undef DEBUG_OUTPUT
+//#define DEBUG_OUTPUT
 
 struct Vec2f {
     float x;
@@ -37,21 +38,20 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
     torch::PackedTensorAccessor32<float,4> sinogram = sinogram_tensor.packed_accessor32<float,4>();
 
     const float M_half = image_tensor.sizes()[3]/2.0f;
-    float tmp = 0.0f;
-    const float grid_offset = modf(M_half, &tmp);
+    const float grid_offset = fmodf(M_half, 1.0f);
     #ifdef DEBUG_OUTPUT
     std::cout << "M_half: " << M_half << std::endl;
     std::cout << "grid_offset: " << grid_offset << std::endl;
     #endif
-    //#pragma omp parallel for
+    //#pragma omp parallel for collapse(2)
     for(uint32_t batch_idx = 0; batch_idx < image_tensor.sizes()[0]; batch_idx++) {
         for(uint32_t theta_idx = 0; theta_idx < thetas_tensor.sizes()[0]; theta_idx++) {
             float theta0 = thetas[theta_idx];
-            float theta = fmod(theta0,PI);
-            float delta_t_x = abs(1.0f/sinf(theta));
-            float delta_t_y = abs(1.0f/cosf(theta));
-            std::cout << "theta: " << theta << std::endl;
+            float theta = fmodf(theta0,PI);
+            float delta_t_x = fabsf(1.0f/sinf(theta));
+            float delta_t_y = fabsf(1.0f/cosf(theta));
             #ifdef DEBUG_OUTPUT
+            std::cout << "theta: " << theta << std::endl;
             std::cout << "delta_t_x: " << delta_t_x << std::endl;
             std::cout << "delta_t_y: " << delta_t_y << std::endl;
             #endif
@@ -75,51 +75,79 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                 #endif
 
                 //Edge-cases for ϑ=0 and ϑ=π/2
-                if(abs(theta0) < FLOAT_CMP_THRESHOLD && -M_half <= pos && pos < M_half) {
-                    #ifdef DEBUG_OUTPUT
-                    std::cout << "\t\tEdge-Case ϑ=0" << std::endl;
-                    #endif
-                    for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
-                        if(-M_half < pos) {
-                            sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))];
+                if(fabsf(theta0) < FLOAT_CMP_THRESHOLD) {
+                    if(-M_half <= pos && pos < M_half) {
+                        #ifdef DEBUG_OUTPUT
+                        std::cout << "\t\tEdge-Case ϑ=0" << std::endl;
+                        #endif
+                        for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
+                            if(-M_half < pos) {
+                                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))];
+                            }
+                            sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))];
                         }
-                        sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))];
                     }
+                    #ifdef DEBUG_OUTPUT
+                    else {
+                        std::cout << "\t\tEdge-Case ϑ=0, outside" << std::endl;
+                    }
+                    #endif
                     continue;
-                } else if(abs(theta0 - PI) < FLOAT_CMP_THRESHOLD && -M_half < pos && pos <= M_half) {
-                    #ifdef DEBUG_OUTPUT
-                    std::cout << "\t\tEdge-Case ϑ=0" << std::endl;
-                    #endif
-                    pos = -pos;
-                    for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
-                        if(-M_half < pos) {
-                            sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))];
+                } else if(fabsf(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD) {
+                    if(-M_half <= pos && pos < M_half) {
+                        #ifdef DEBUG_OUTPUT
+                        std::cout << "\t\tEdge-Case ϑ=π/2" << std::endl;
+                        #endif
+                        for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
+                            if(-M_half < pos) {
+                                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i];
+                            }
+                            sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i];
                         }
-                        sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))];
                     }
+                    #ifdef DEBUG_OUTPUT
+                    else {
+                        std::cout << "\t\tEdge-Case ϑ=π/2, outside" << std::endl;
+                    }
+                    #endif
                     continue;
-                } else if(abs(theta0-PI_HALF) < FLOAT_CMP_THRESHOLD && -M_half <= pos && pos < M_half) {
-                    #ifdef DEBUG_OUTPUT
-                    std::cout << "\t\tEdge-Case ϑ=π/2" << std::endl;
-                    #endif
-                    for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
-                        if(-M_half < pos) {
-                            sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i];
+                } else if(fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
+                    if(-M_half <= pos && pos < M_half) {
+                        #ifdef DEBUG_OUTPUT
+                        std::cout << "\t\tEdge-Case ϑ=π" << std::endl;
+                        #endif
+                        pos = -pos;
+                        for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
+                            if(-M_half < pos) {
+                                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))];
+                            }
+                            sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))];
                         }
-                        sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i];
                     }
+                    #ifdef DEBUG_OUTPUT
+                    else {
+                        std::cout << "\t\tEdge-Case ϑ=π, outside" << std::endl;
+                    }
+                    #endif
                     continue;
-                } else if(abs(theta0-3*PI_HALF) < FLOAT_CMP_THRESHOLD && -M_half < pos && pos <= M_half) {
-                    #ifdef DEBUG_OUTPUT
-                    std::cout << "\t\tEdge-Case ϑ=π/2" << std::endl;
-                    #endif
-                    pos = -pos;
-                    for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
-                        if(-M_half < pos) {
-                            sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i];
+                } else if(fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
+                    if(-M_half <= pos && pos < M_half) {
+                        #ifdef DEBUG_OUTPUT
+                        std::cout << "\t\tEdge-Case ϑ=3/2π" << std::endl;
+                        #endif
+                        pos = -pos;
+                        for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
+                            if(-M_half < pos) {
+                                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i];
+                            }
+                            sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i];
                         }
-                        sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i];
                     }
+                    #ifdef DEBUG_OUTPUT
+                    else {
+                        std::cout << "\t\tEdge-Case ϑ=3/2π, outside" << std::endl;
+                    }
+                    #endif
                     continue;
                 }
 
@@ -172,6 +200,8 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                     case Case::BOTTOM_MINUS: img_idx = {static_cast<uint32_t>(floorf(bottom.x+M_half)), 0}; break;
                     case Case::BOTTOM_PLUS:  img_idx = {static_cast<uint32_t>(floorf(bottom.x+M_half)), 0}; break;
                 }
+                img_idx.x = CLAMP(img_idx.x, 0, image_tensor.sizes()[3]-1);
+                img_idx.y = CLAMP(img_idx.y, 0, image_tensor.sizes()[3]-1);
                 #ifdef DEBUG_OUTPUT
                 std::cout << "\t\timg_idx: (" << img_idx.x << ", " << img_idx.y << ")" << std::endl;
                 #endif
@@ -179,7 +209,7 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                 //March ray
                 while(img_idx.x >= 0 && img_idx.x < image_tensor.sizes()[3] && img_idx.y >= 0 && img_idx.y < image_tensor.sizes()[2]) {
                     //Diagonal crossing
-                    if(abs(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
+                    if(fabsf(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
                         last_t_x += delta_t_x;
                         last_t_y += delta_t_y;
                         sinogram[batch_idx][0][theta_idx][position_idx] += (last_t_x-t)*image[batch_idx][0][img_idx.y][img_idx.x];
