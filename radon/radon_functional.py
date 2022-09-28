@@ -20,6 +20,7 @@ def radon_forward(image: torch.Tensor, angles: torch.Tensor|None = None, positio
     assert angles.is_contiguous(), "'angles' must be contigous"
     assert angles.dtype == torch.float32 or angles.dtype == torch.float64, "'angles' must be a float tensor"
     assert angles.dim() == 1, "'angles' must have one dimension"
+    angles %= 2* 3.14159265359
 
     if positions == None:
         positions = torch.arange(0.0, image.shape[2]*1.41421356237, device=image.device)-(image.shape[2]*1.41421356237)//2
