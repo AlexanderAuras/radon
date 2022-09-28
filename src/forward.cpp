@@ -46,7 +46,8 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
     //#pragma omp parallel for
     for(uint32_t batch_idx = 0; batch_idx < image_tensor.sizes()[0]; batch_idx++) {
         for(uint32_t theta_idx = 0; theta_idx < thetas_tensor.sizes()[0]; theta_idx++) {
-            float theta = thetas[theta_idx];
+            float theta0 = thetas[theta_idx];
+            float theta = fmod(theta0,PI);
             float delta_t_x = abs(1.0f/sinf(theta));
             float delta_t_y = abs(1.0f/cosf(theta));
             std::cout << "theta: " << theta << std::endl;
@@ -56,10 +57,10 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
             #endif
             for(uint32_t position_idx = 0; position_idx < positions_tensor.sizes()[0]; position_idx++) {
                 float pos = positions[position_idx];
-                Vec2f left   = {-M_half, LINE_OF_X(pos, theta, -M_half)};
-                Vec2f right  = { M_half, LINE_OF_X(pos, theta,  M_half)};
-                Vec2f bottom = {LINE_OF_Y(pos, theta, -M_half), -M_half};
-                Vec2f top    = {LINE_OF_Y(pos, theta,  M_half),  M_half};
+                Vec2f left   = {-M_half, LINE_OF_X(pos, theta0, -M_half)};
+                Vec2f right  = { M_half, LINE_OF_X(pos, theta0,  M_half)};
+                Vec2f bottom = {LINE_OF_Y(pos, theta0, -M_half), -M_half};
+                Vec2f top    = {LINE_OF_Y(pos, theta0,  M_half),  M_half};
                 float t = 0.0f;
                 float last_t_x = 0.0f;
                 float last_t_y = 0.0f;
