@@ -1,3 +1,4 @@
+from math import ceil
 import typing
 
 import torch
@@ -23,7 +24,8 @@ def radon_forward(image: torch.Tensor, angles: torch.Tensor|None = None, positio
     angles %= 6.28318530718
 
     if positions == None:
-        positions = torch.arange(0.0, image.shape[2]*1.41421356237, device=image.device)-(image.shape[2]*1.41421356237)//2
+        M = ceil(image.shape[2]*1.41421356237/2.0)
+        positions = torch.arange(-M, M+1, device=image.device).to(torch.float32)
     assert positions.is_contiguous(), "'positions' must be contigous"
     assert positions.dtype == torch.float32, "'positions' must be a float32 tensor"
     assert positions.dim() == 1, "'positions' must have one dimension"
@@ -50,7 +52,8 @@ def radon_backward(sinogram: torch.Tensor, image_size: int, angles: torch.Tensor
     angles %= 6.28318530718
 
     if positions == None:
-        positions = torch.arange(0.0, image_size*1.41421356237, device=sinogram.device)-(image_size*1.41421356237)//2
+        M = ceil(image_size*1.41421356237/2.0)
+        positions = torch.arange(-M, M+1, device=sinogram.device).to(torch.float32)
     assert positions.is_contiguous(), "'positions' must be contigous"
     assert positions.dtype == torch.float32, "'positions' must be a float32 tensor"
     assert positions.dim() == 1, "'positions' must have one dimension"

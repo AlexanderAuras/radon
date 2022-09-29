@@ -43,7 +43,7 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
     std::cout << "M_half: " << M_half << std::endl;
     std::cout << "grid_offset: " << grid_offset << std::endl;
     #endif
-    //#pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2)
     for(uint32_t batch_idx = 0; batch_idx < image_tensor.sizes()[0]; batch_idx++) {
         for(uint32_t theta_idx = 0; theta_idx < thetas_tensor.sizes()[0]; theta_idx++) {
             float theta0 = thetas[theta_idx];

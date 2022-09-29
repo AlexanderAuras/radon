@@ -3,6 +3,7 @@
 
 #include "filters.hpp"
 
+//#ifdef CUDA_SUPPORTED
 torch::Tensor cudaForward(torch::Tensor image, torch::Tensor angles, torch::Tensor positions);
 torch::Tensor cudaBackward(torch::Tensor sinogram, torch::Tensor angles, torch::Tensor distances, size_t imageSize, const uint8_t filterId);
 torch::Tensor cpuForward(torch::Tensor image, torch::Tensor angles, torch::Tensor positions);
