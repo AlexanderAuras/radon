@@ -9,8 +9,6 @@
 #define FLOAT_CMP_THRESHOLD 0.001f
 #define CLAMP(x, mi, ma) x<mi?mi:(x<ma?x:ma)
 
-//#define DEBUG_OUTPUT
-
 struct Vec2f {
     float x;
     float y;
@@ -39,10 +37,6 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
 
     const float M_half = image_tensor.sizes()[3]/2.0f;
     const float grid_offset = fmodf(M_half, 1.0f);
-    #ifdef DEBUG_OUTPUT
-    std::cout << "M_half: " << M_half << std::endl;
-    std::cout << "grid_offset: " << grid_offset << std::endl;
-    #endif
     #pragma omp parallel for collapse(2)
     for(uint32_t batch_idx = 0; batch_idx < image_tensor.sizes()[0]; batch_idx++) {
         for(uint32_t theta_idx = 0; theta_idx < thetas_tensor.sizes()[0]; theta_idx++) {
@@ -50,11 +44,6 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
             float theta = fmodf(theta0,PI);
             float delta_t_x = fabsf(1.0f/sinf(theta));
             float delta_t_y = fabsf(1.0f/cosf(theta));
-            #ifdef DEBUG_OUTPUT
-            std::cout << "theta: " << theta << std::endl;
-            std::cout << "delta_t_x: " << delta_t_x << std::endl;
-            std::cout << "delta_t_y: " << delta_t_y << std::endl;
-            #endif
             for(uint32_t position_idx = 0; position_idx < positions_tensor.sizes()[0]; position_idx++) {
                 float pos = positions[position_idx];
                 Vec2f left   = {-M_half, LINE_OF_X(pos, theta0, -M_half)};
@@ -66,20 +55,9 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                 float last_t_y = 0.0f;
                 Vec2i img_idx = {};
 
-                #ifdef DEBUG_OUTPUT
-                std::cout << "\tpos: " << pos << std::endl;
-                std::cout << "\tleft: (" << left.x << ", " << left.y << ")" << std::endl;
-                std::cout << "\tright: (" << right.x << ", " << right.y << ")" << std::endl;
-                std::cout << "\tbottom: (" << bottom.x << ", " << bottom.y << ")" << std::endl;
-                std::cout << "\ttop: (" << top.x << ", " << top.y << ")" << std::endl;
-                #endif
-
                 //Edge-cases for ϑ=0 and ϑ=π/2
                 if(fabsf(theta0) < FLOAT_CMP_THRESHOLD) {
                     if(-M_half <= pos && pos < M_half) {
-                        #ifdef DEBUG_OUTPUT
-                        std::cout << "\t\tEdge-Case ϑ=0" << std::endl;
-                        #endif
                         for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
                             if(-M_half < pos) {
                                 sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))];
@@ -87,17 +65,9 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                             sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))];
                         }
                     }
-                    #ifdef DEBUG_OUTPUT
-                    else {
-                        std::cout << "\t\tEdge-Case ϑ=0, outside" << std::endl;
-                    }
-                    #endif
                     continue;
                 } else if(fabsf(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD) {
                     if(-M_half <= pos && pos < M_half) {
-                        #ifdef DEBUG_OUTPUT
-                        std::cout << "\t\tEdge-Case ϑ=π/2" << std::endl;
-                        #endif
                         for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
                             if(-M_half < pos) {
                                 sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i];
@@ -105,17 +75,9 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                             sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i];
                         }
                     }
-                    #ifdef DEBUG_OUTPUT
-                    else {
-                        std::cout << "\t\tEdge-Case ϑ=π/2, outside" << std::endl;
-                    }
-                    #endif
                     continue;
                 } else if(fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
                     if(-M_half <= pos && pos < M_half) {
-                        #ifdef DEBUG_OUTPUT
-                        std::cout << "\t\tEdge-Case ϑ=π" << std::endl;
-                        #endif
                         pos = -pos;
                         for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
                             if(-M_half < pos) {
@@ -124,17 +86,9 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                             sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))];
                         }
                     }
-                    #ifdef DEBUG_OUTPUT
-                    else {
-                        std::cout << "\t\tEdge-Case ϑ=π, outside" << std::endl;
-                    }
-                    #endif
                     continue;
                 } else if(fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
                     if(-M_half <= pos && pos < M_half) {
-                        #ifdef DEBUG_OUTPUT
-                        std::cout << "\t\tEdge-Case ϑ=3/2π" << std::endl;
-                        #endif
                         pos = -pos;
                         for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
                             if(-M_half < pos) {
@@ -143,11 +97,6 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                             sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i];
                         }
                     }
-                    #ifdef DEBUG_OUTPUT
-                    else {
-                        std::cout << "\t\tEdge-Case ϑ=3/2π, outside" << std::endl;
-                    }
-                    #endif
                     continue;
                 }
 
@@ -160,22 +109,8 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                 } else if(-M_half <= bottom.x && bottom.x < M_half) {
                     curr_case = theta>PI_HALF?Case::BOTTOM_PLUS:Case::BOTTOM_MINUS;
                 } else {
-                    #ifdef DEBUG_OUTPUT
-                    std::cout << "\t\tCase OUTSIDE" << std::endl;
-                    #endif
                     continue;
                 }
-
-                #ifdef DEBUG_OUTPUT
-                switch(curr_case) {
-                    case Case::TOP_MINUS:    std::cout << "\t\tCase TOP_MINUS" << std::endl; break;
-                    case Case::TOP_PLUS:     std::cout << "\t\tCase TOP_PLUS" << std::endl; break;
-                    case Case::LEFT_MINUS:   std::cout << "\t\tCase LEFT_MINUS" << std::endl; break;
-                    case Case::LEFT_PLUS:    std::cout << "\t\tCase LEFT_PLUS" << std::endl; break;
-                    case Case::BOTTOM_MINUS: std::cout << "\t\tCase BOTTOM_MINUS" << std::endl; break;
-                    case Case::BOTTOM_PLUS:  std::cout << "\t\tCase BOTTOM_PLUS" << std::endl; break;
-                }
-                #endif
 
                 //Init last_t_x, last_t_y
                 // Check again
@@ -187,9 +122,6 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                     case Case::BOTTOM_MINUS: last_t_y = 0.0f; last_t_x = -(ceilf(bottom.x+grid_offset)-grid_offset-bottom.x)/sinf(theta); break;
                     case Case::BOTTOM_PLUS:  last_t_y = 0.0f; last_t_x =  (floorf(bottom.x+grid_offset)-grid_offset-bottom.x)/sinf(theta); break;
                 }
-                #ifdef DEBUG_OUTPUT
-                std::cout << "\t\tlast_t_x: " << last_t_x << ", last_t_y: " << last_t_y << std::endl;
-                #endif
 
                 //Init img_idx
                 switch(curr_case) {
@@ -202,9 +134,6 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                 }
                 img_idx.x = CLAMP(img_idx.x, 0, image_tensor.sizes()[3]-1);
                 img_idx.y = CLAMP(img_idx.y, 0, image_tensor.sizes()[3]-1);
-                #ifdef DEBUG_OUTPUT
-                std::cout << "\t\timg_idx: (" << img_idx.x << ", " << img_idx.y << ")" << std::endl;
-                #endif
 
                 //March ray
                 while(img_idx.x >= 0 && img_idx.x < image_tensor.sizes()[3] && img_idx.y >= 0 && img_idx.y < image_tensor.sizes()[2]) {
@@ -213,9 +142,6 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                         last_t_x += delta_t_x;
                         last_t_y += delta_t_y;
                         sinogram[batch_idx][0][theta_idx][position_idx] += (last_t_x-t)*image[batch_idx][0][img_idx.y][img_idx.x];
-                        #ifdef DEBUG_OUTPUT
-                        std::cout << "\t\t\tD-STEP img_idx: (" << img_idx.x << ", " << img_idx.y << "), dt: " << (last_t_x-t) << ", t: " << last_t_x << ", last_t_x: " << last_t_x << ", last_t_y: " << last_t_y << std::endl;
-                        #endif
                         //Modify img_idx
                         switch(curr_case) {
                             case Case::TOP_MINUS:    img_idx.x--; img_idx.y--; break;
@@ -229,9 +155,6 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                     } else if(last_t_x+delta_t_x < last_t_y+delta_t_y) { //Horizontal crossing
                         last_t_x += delta_t_x;
                         sinogram[batch_idx][0][theta_idx][position_idx] += (last_t_x-t)*image[batch_idx][0][img_idx.y][img_idx.x];
-                        #ifdef DEBUG_OUTPUT
-                        std::cout << "\t\t\tH-STEP img_idx: (" << img_idx.x << ", " << img_idx.y << "), dt: " << (last_t_x-t) << ", t: " << last_t_x << ", last_t_x: " << last_t_x << ", last_t_y: " << last_t_y << std::endl;
-                        #endif
                         //Modify img_idx
                         switch(curr_case) {
                             case Case::TOP_MINUS:    img_idx.x--; break;
@@ -245,9 +168,6 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                     } else { //Vertical crossing
                         last_t_y += delta_t_y;
                         sinogram[batch_idx][0][theta_idx][position_idx] += (last_t_y-t)*image[batch_idx][0][img_idx.y][img_idx.x];
-                        #ifdef DEBUG_OUTPUT
-                        std::cout << "\t\t\tV-STEP img_idx: (" << img_idx.x << ", " << img_idx.y << "), dt: " << (last_t_y-t) << ", t: " << last_t_y << ", last_t_x: " << last_t_x << ", last_t_y: " << last_t_y << std::endl;
-                        #endif
                         //Modify img_idx
                         switch(curr_case) {
                             case Case::TOP_MINUS:    img_idx.y--; break;
