@@ -1,6 +1,5 @@
 #include <torch/extension.h>
 #include <omp.h>
-#include <iostream>
 
 #define LINE_OF_X(s,a,x) ((s)-(x)*cosf(a))/sinf(a)
 #define LINE_OF_Y(s,a,y) ((s)-(y)*sinf(a))/cosf(a)
@@ -38,7 +37,7 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
     const float M_half = image_tensor.sizes()[3]/2.0f;
     const float grid_offset = fmodf(M_half, 1.0f);
     #pragma omp parallel for collapse(2)
-    for(uint32_t batch_idx = 0; batch_idx < image_tensor.sizes()[0]; batch_idx++) {
+    for(int32_t batch_idx = 0; batch_idx < image_tensor.sizes()[0]; batch_idx++) {
         for(uint32_t theta_idx = 0; theta_idx < thetas_tensor.sizes()[0]; theta_idx++) {
             float theta0 = thetas[theta_idx];
             float theta = fmodf(theta0,PI);
