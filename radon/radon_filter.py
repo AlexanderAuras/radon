@@ -1,15 +1,14 @@
-from turtle import shape
 import typing
 
 import torch
 
 
 
-def radon_filter(sinogram: torch.Tensor, filter: typing.Callable[[torch.Tensor], torch.Tensor], params: typing.Any) -> torch.Tensor:
+def radon_filter(sinogram: torch.Tensor, filter: typing.Callable[[torch.Tensor, typing.Any], torch.Tensor], params: typing.Any) -> torch.Tensor:
     assert sinogram.dtype == torch.float32, "'sinogram' must be a float32 tensor"
     assert sinogram.dim() == 4, "'sinogram' must have four dimensions [B,C,H,W]"
     assert sinogram.shape[1] == 1, "'sinogram' must have exactly one channel"
-    return typing.cast(torch.Tensor, torch.fft.ifft(torch.fft.ifftshift(filter(torch.fft.fftshift(torch.fft.fft(sinogram, dim=3 ,norm = 'forward'), dim=3), params), dim=3), dim=3,norm = 'forward')).real
+    return typing.cast(torch.Tensor, torch.fft.ifft(torch.fft.ifftshift(filter(torch.fft.fftshift(torch.fft.fft(sinogram, dim=3, norm="forward"), dim=3), params), dim=3), dim=3, norm="forward")).real.contiguous()
 
 
 

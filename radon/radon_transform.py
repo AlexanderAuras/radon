@@ -9,13 +9,13 @@ from radon.radon_functional import radon_forward, radon_backward
 
 class RadonTransformFunc(torch.autograd.Function):
     @staticmethod
-    def forward(ctx: typing.Any, image: torch.Tensor, angles: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> torch.Tensor:
-        ctx.angles = angles
+    def forward(ctx: typing.Any, image: torch.Tensor, thetas: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> torch.Tensor:
+        ctx.thetas = thetas
         ctx.positions = positions
         ctx.image_size = image.shape[2]
         args = [image]
-        if angles != None:
-            args.append(angles)
+        if thetas != None:
+            args.append(thetas)
         if positions != None:
             args.append(positions)
         return radon_forward(*args)
@@ -23,8 +23,8 @@ class RadonTransformFunc(torch.autograd.Function):
     @staticmethod
     def backward(ctx: typing.Any, grad_output: torch.Tensor) -> tuple[torch.Tensor, None, None]:
         args = [grad_output.contiguous(), ctx.image_size]
-        if ctx.angles != None:
-            args.append(ctx.angles)
+        if ctx.thetas != None:
+            args.append(ctx.thetas)
         if ctx.positions != None:
             args.append(ctx.positions)
         return radon_backward(*args), None, None
@@ -32,10 +32,10 @@ class RadonTransformFunc(torch.autograd.Function):
 
 
 class RadonTransform(torch.nn.Module):
-    def __init__(self, angles: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> None:
+    def __init__(self, thetas: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> None:
         super().__init__()
-        self.angles = angles
+        self.thetas = thetas
         self.positions = positions
     
     def forward(self, x: torch.Tensor) -> None:
-        return RadonTransformFunc.apply(x, self.angles, self.positions)
+        return RadonTransformFunc.apply(x, self.thetas, self.positions)

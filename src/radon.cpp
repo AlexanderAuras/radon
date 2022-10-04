@@ -2,11 +2,11 @@
 #include <omp.h>
 
 #ifdef RADON_CUDA_AVAILABLE
-torch::Tensor cudaForward(torch::Tensor image, torch::Tensor angles, torch::Tensor positions);
-torch::Tensor cudaBackward(torch::Tensor sinogram, torch::Tensor angles, torch::Tensor distances, size_t imageSize);
+torch::Tensor cudaForward(torch::Tensor image, torch::Tensor thetas, torch::Tensor positions);
+torch::Tensor cudaBackward(torch::Tensor sinogram, torch::Tensor thetas, torch::Tensor distances, size_t image_size);
 #endif
-torch::Tensor cpuForward(torch::Tensor image, torch::Tensor angles, torch::Tensor positions);
-torch::Tensor cpuBackward(torch::Tensor sinogram, torch::Tensor angles, torch::Tensor distances, size_t imageSize);
+torch::Tensor cpuForward(torch::Tensor image, torch::Tensor thetas, torch::Tensor positions);
+torch::Tensor cpuBackward(torch::Tensor sinogram, torch::Tensor thetas, torch::Tensor distances, size_t image_size);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, module) {
     #ifdef RADON_CUDA_AVAILABLE

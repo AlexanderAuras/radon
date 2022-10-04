@@ -14,8 +14,8 @@ struct Vec2f {
 };
 
 struct Vec2i {
-    uint32_t x;
-    uint32_t y;
+    int32_t x;
+    int32_t y;
 };
 
 enum class Case {
@@ -24,39 +24,38 @@ enum class Case {
     BOTTOM_PLUS, BOTTOM_MINUS
 };
 
-torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tensor thetas_tensor, const torch::Tensor positions_tensor, const size_t imageSize) {
+torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tensor thetas_tensor, const torch::Tensor positions_tensor, const size_t image_size) {
     const torch::PackedTensorAccessor32<float,4> sinogram = sinogram_tensor.packed_accessor32<float,4>();
     const torch::PackedTensorAccessor32<float,1> thetas = thetas_tensor.packed_accessor32<float,1>();
     const torch::PackedTensorAccessor32<float,1> positions = positions_tensor.packed_accessor32<float,1>();
-    torch::Tensor image_tensor = torch::zeros({sinogram_tensor.sizes()[0], 1, static_cast<signed long>(imageSize), static_cast<signed long>(imageSize)});
+    torch::Tensor image_tensor = torch::zeros({sinogram_tensor.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)});
     torch::PackedTensorAccessor32<float,4> image = image_tensor.packed_accessor32<float,4>();
 
-    const float M_half = image_tensor.sizes()[3]/2.0f;
+    const float M_half      = image_size/2.0f;
     const float grid_offset = fmodf(M_half, 1.0f);
     #pragma omp parallel for collapse(2)
     for(int32_t batch_idx = 0; batch_idx < image_tensor.sizes()[0]; batch_idx++) {
         for(uint32_t theta_idx = 0; theta_idx < thetas_tensor.sizes()[0]; theta_idx++) {
-            float theta0 = thetas[theta_idx];
-            float theta = fmodf(theta0,PI);
-            float delta_t_x = fabsf(1.0f/sinf(theta));
-            float delta_t_y = fabsf(1.0f/cosf(theta));
+            const float theta0    = thetas[theta_idx];
+            const float theta     = fmodf(theta0,PI);
+            const float delta_t_x = fabsf(1.0f/sinf(theta));
+            const float delta_t_y = fabsf(1.0f/cosf(theta));
             for(uint32_t position_idx = 0; position_idx < positions_tensor.sizes()[0]; position_idx++) {
-                float pos = positions[position_idx];
-                Vec2f left   = {-M_half, LINE_OF_X(pos, theta0, -M_half)};
-                Vec2f right  = { M_half, LINE_OF_X(pos, theta0,  M_half)};
-                Vec2f bottom = {LINE_OF_Y(pos, theta0, -M_half), -M_half};
-                Vec2f top    = {LINE_OF_Y(pos, theta0,  M_half),  M_half};
-                float t = 0.0f;
-                float last_t_x = 0.0f;
-                float last_t_y = 0.0f;
-                Vec2i img_idx = {};
+                const float pos    = positions[position_idx];
+                const Vec2f left   = {-M_half, LINE_OF_X(pos, theta0, -M_half)};
+                const Vec2f right  = { M_half, LINE_OF_X(pos, theta0,  M_half)};
+                const Vec2f bottom = {LINE_OF_Y(pos, theta0, -M_half), -M_half};
+                const Vec2f top    = {LINE_OF_Y(pos, theta0,  M_half),  M_half};
+                float t            = 0.0f;
+                float last_t_x     = 0.0f;
+                float last_t_y     = 0.0f;
+                Vec2i img_idx      = {};
 
                 //Edge-cases for ϑ=0 and ϑ=π/2
                 if(fabsf(theta0) < FLOAT_CMP_THRESHOLD) {
                     if(-M_half <= pos && pos < M_half) {
-                        for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
+                        for(uint32_t i = 0; i < image_size; i++) {
                             if(-M_half < pos) {
-                                //update(from, to, from_idx, to_idx);
                                 image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
                             }
                             image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))]+= 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
@@ -65,7 +64,7 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
                     continue;
                 } else if(fabsf(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD) {
                     if(-M_half <= pos && pos < M_half) {
-                        for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
+                        for(uint32_t i = 0; i < image_size; i++) {
                             if(-M_half < pos) {
                                 image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
                             }
@@ -75,23 +74,21 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
                     continue;
                 } else if(fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
                     if(-M_half <= pos && pos < M_half) {
-                        pos = -pos;
-                        for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
-                            if(-M_half < pos) {
-                                image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                        for(uint32_t i = 0; i < image_size; i++) {
+                            if(-M_half < -pos) {
+                                image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half-0.5f))] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
                             }
-                            image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                            image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half))] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
                         }
                     }
                     continue;
                 } else if(fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
                     if(-M_half <= pos && pos < M_half) {
-                        pos = -pos;
-                        for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
-                            if(-M_half < pos) {
-                                image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                        for(uint32_t i = 0; i < image_size; i++) {
+                            if(-M_half < -pos) {
+                                image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half-0.5f))][i] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
                             }
-                            image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                            image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half))][i] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
                         }
                     }
                     continue;
@@ -122,18 +119,18 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
 
                 //Init img_idx
                 switch(curr_case) {
-                    case Case::TOP_MINUS:    img_idx = {static_cast<uint32_t>(floorf(top.x+M_half)), static_cast<uint32_t>(image_tensor.sizes()[3]-1)}; break;
-                    case Case::TOP_PLUS:     img_idx = {static_cast<uint32_t>(floorf(top.x+M_half)), static_cast<uint32_t>(image_tensor.sizes()[3]-1)}; break;
-                    case Case::LEFT_MINUS:   img_idx = {0, static_cast<uint32_t>(floorf(left.y+M_half))}; break;
-                    case Case::LEFT_PLUS:    img_idx = {0, static_cast<uint32_t>(floorf(left.y+M_half))}; break;
-                    case Case::BOTTOM_MINUS: img_idx = {static_cast<uint32_t>(floorf(bottom.x+M_half)), 0}; break;
-                    case Case::BOTTOM_PLUS:  img_idx = {static_cast<uint32_t>(floorf(bottom.x+M_half)), 0}; break;
+                    case Case::TOP_MINUS:    img_idx = {static_cast<int32_t>(floorf(top.x+M_half)), static_cast<int32_t>(image_size-1)}; break;
+                    case Case::TOP_PLUS:     img_idx = {static_cast<int32_t>(floorf(top.x+M_half)), static_cast<int32_t>(image_size-1)}; break;
+                    case Case::LEFT_MINUS:   img_idx = {0, static_cast<int32_t>(floorf(left.y+M_half))}; break;
+                    case Case::LEFT_PLUS:    img_idx = {0, static_cast<int32_t>(floorf(left.y+M_half))}; break;
+                    case Case::BOTTOM_MINUS: img_idx = {static_cast<int32_t>(floorf(bottom.x+M_half)), 0}; break;
+                    case Case::BOTTOM_PLUS:  img_idx = {static_cast<int32_t>(floorf(bottom.x+M_half)), 0}; break;
                 }
-                img_idx.x = CLAMP(img_idx.x, 0, image_tensor.sizes()[3]-1);
-                img_idx.y = CLAMP(img_idx.y, 0, image_tensor.sizes()[3]-1);
+                img_idx.x = CLAMP(img_idx.x, 0, image_size-1);
+                img_idx.y = CLAMP(img_idx.y, 0, image_size-1);
 
                 //March ray
-                while(img_idx.x >= 0 && img_idx.x < image_tensor.sizes()[3] && img_idx.y >= 0 && img_idx.y < image_tensor.sizes()[2]) {
+                while(img_idx.x >= 0 && img_idx.x < image_size && img_idx.y >= 0 && img_idx.y < image_tensor.sizes()[2]) {
                     //Diagonal crossing
                     if(fabsf(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
                         last_t_x += delta_t_x;
