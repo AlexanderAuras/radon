@@ -61,9 +61,9 @@ template <typename T> __global__ void cudaBackwardKernel(
         if(-M_half <= pos && pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
                 if(-M_half < pos) {
-                    image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                    atomicAdd(&image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
                 }
-                image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))]+= 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                atomicAdd(&image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
             }
         }
         return;
@@ -71,29 +71,29 @@ template <typename T> __global__ void cudaBackwardKernel(
         if(-M_half <= pos && pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
                 if(-M_half < pos) {
-                    image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                    atomicAdd(&image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
                 }
-                image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                atomicAdd(&image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
             }
         }
         return;
     } else if(fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
-        if(-M_half <= pos && pos < M_half) {
+        if(-M_half <= -pos && -pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
                 if(-M_half < -pos) {
-                    image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half-0.5f))] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                    atomicAdd(&image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half-0.5f))], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
                 }
-                image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half))] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                atomicAdd(&image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half))], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
             }
         }
         return;
     } else if(fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
-        if(-M_half <= pos && pos < M_half) {
+        if(-M_half <= -pos && -pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
                 if(-M_half < -pos) {
-                    image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half-0.5f))][i] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                    atomicAdd(&image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half-0.5f))][i], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
                 }
-                image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half))][i] += 0.5f*sinogram[batch_idx][0][theta_idx][position_idx];
+                atomicAdd(&image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half))][i], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
             }
         }
         return;
@@ -140,7 +140,7 @@ template <typename T> __global__ void cudaBackwardKernel(
         if(fabsf(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
             last_t_x += delta_t_x;
             last_t_y += delta_t_y;
-            image[batch_idx][0][img_idx.y][img_idx.x] += (last_t_x-t)*sinogram[batch_idx][0][theta_idx][position_idx];
+            atomicAdd(&image[batch_idx][0][img_idx.y][img_idx.x], (last_t_x-t)*sinogram[batch_idx][0][theta_idx][position_idx]);
             //Modify img_idx
             switch(curr_case) {
                 case Case::TOP_MINUS:    img_idx.x--; img_idx.y--; break;
@@ -153,7 +153,7 @@ template <typename T> __global__ void cudaBackwardKernel(
             t = last_t_x;
         } else if(last_t_x+delta_t_x < last_t_y+delta_t_y) { //Horizontal crossing
             last_t_x += delta_t_x;
-            image[batch_idx][0][img_idx.y][img_idx.x] += (last_t_x-t)*sinogram[batch_idx][0][theta_idx][position_idx];
+            atomicAdd(&image[batch_idx][0][img_idx.y][img_idx.x], (last_t_x-t)*sinogram[batch_idx][0][theta_idx][position_idx]);
             //Modify img_idx
             switch(curr_case) {
                 case Case::TOP_MINUS:    img_idx.x--; break;
@@ -166,7 +166,7 @@ template <typename T> __global__ void cudaBackwardKernel(
             t = last_t_x;
         } else { //Vertical crossing
             last_t_y += delta_t_y;
-            image[batch_idx][0][img_idx.y][img_idx.x] += (last_t_y-t)*sinogram[batch_idx][0][theta_idx][position_idx];
+            atomicAdd(&image[batch_idx][0][img_idx.y][img_idx.x], (last_t_y-t)*sinogram[batch_idx][0][theta_idx][position_idx]);
             //Modify img_idx
             switch(curr_case) {
                 case Case::TOP_MINUS:    img_idx.y--; break;
@@ -202,5 +202,5 @@ torch::Tensor cudaBackward(const torch::Tensor sinogram, const torch::Tensor the
             );
         })
     );
-    return image;
+    return image/static_cast<float>(image_size);
 }

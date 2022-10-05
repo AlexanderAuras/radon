@@ -23,19 +23,17 @@ enum class Case {
     BOTTOM_PLUS, BOTTOM_MINUS
 };
 
-template <typename T> __global__ void cudaForwardKernel(
-        const torch::PackedTensorAccessor32<T,4,torch::RestrictPtrTraits> image,
+template <typename T> __global__ void cudaMatrixKernel(
+        const torch::PackedTensorAccessor32<T,2,torch::RestrictPtrTraits> image,
         const torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> thetas,
         const torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> positions,
-        torch::PackedTensorAccessor32<T,4,torch::RestrictPtrTraits> sinogram,
-        const size_t batch_count,
+        torch::PackedTensorAccessor32<T,4,torch::RestrictPtrTraits> matrix,
         const size_t image_size,
         const size_t theta_count,
         const size_t position_count) {
-    const size_t batch_idx    = static_cast<size_t>(blockIdx.z*blockDim.z+threadIdx.z);
     const size_t theta_idx    = static_cast<size_t>(blockIdx.y*blockDim.y+threadIdx.y);
     const size_t position_idx = static_cast<size_t>(blockIdx.x*blockDim.x+threadIdx.x);
-    if(batch_idx >= batch_count || theta_idx >= theta_count || position_idx >= position_count) {
+    if(theta_idx >= theta_count || position_idx >= position_count) {
         return;
     }
     
@@ -61,9 +59,9 @@ template <typename T> __global__ void cudaForwardKernel(
         if(-M_half <= pos && pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
                 if(-M_half < pos) {
-                    sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))];
+                    matrix[theta_idx][position_idx][i][static_cast<size_t>(floorf(pos+M_half-0.5f))] += 0.5f;
                 }
-                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))];
+                matrix[theta_idx][position_idx][i][static_cast<size_t>(floorf(pos+M_half))] += 0.5f;
             }
         }
         return;
@@ -71,9 +69,9 @@ template <typename T> __global__ void cudaForwardKernel(
         if(-M_half <= pos && pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
                 if(-M_half < pos) {
-                    sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i];
+                    matrix[theta_idx][position_idx][static_cast<size_t>(floorf(pos+M_half-0.5f))][i] += 0.5f;
                 }
-                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i];
+                matrix[theta_idx][position_idx][static_cast<size_t>(floorf(pos+M_half))][i] += 0.5f;
             }
         }
         return;
@@ -81,9 +79,9 @@ template <typename T> __global__ void cudaForwardKernel(
         if(-M_half <= -pos && -pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
                 if(-M_half < -pos) {
-                    sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half-0.5f))];
+                    matrix[theta_idx][position_idx][i][static_cast<size_t>(floorf(-pos+M_half-0.5f))] += 0.5f;
                 }
-                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half))];
+                matrix[theta_idx][position_idx][i][static_cast<size_t>(floorf(-pos+M_half))] += 0.5f;
             }
         }
         return;
@@ -91,9 +89,9 @@ template <typename T> __global__ void cudaForwardKernel(
         if(-M_half <= -pos && -pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
                 if(-M_half < -pos) {
-                    sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half-0.5f))][i];
+                    matrix[theta_idx][position_idx][static_cast<size_t>(floorf(-pos+M_half-0.5f))][i] += 0.5f;
                 }
-                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half))][i];
+                matrix[theta_idx][position_idx][static_cast<size_t>(floorf(-pos+M_half))][i] += 0.5f;
             }
         }
         return;
@@ -140,7 +138,7 @@ template <typename T> __global__ void cudaForwardKernel(
         if(fabsf(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
             last_t_x += delta_t_x;
             last_t_y += delta_t_y;
-            sinogram[batch_idx][0][theta_idx][position_idx] += (last_t_x-t)*image[batch_idx][0][img_idx.y][img_idx.x];
+            matrix[theta_idx][position_idx][img_idx.y][img_idx.x] += last_t_x-t;
             //Modify img_idx
             switch(curr_case) {
                 case Case::TOP_MINUS:    img_idx.x--; img_idx.y--; break;
@@ -153,7 +151,7 @@ template <typename T> __global__ void cudaForwardKernel(
             t = last_t_x;
         } else if(last_t_x+delta_t_x < last_t_y+delta_t_y) { //Horizontal crossing
             last_t_x += delta_t_x;
-            sinogram[batch_idx][0][theta_idx][position_idx] += (last_t_x-t)*image[batch_idx][0][img_idx.y][img_idx.x];
+            matrix[theta_idx][position_idx][img_idx.y][img_idx.x] += last_t_x-t;
             //Modify img_idx
             switch(curr_case) {
                 case Case::TOP_MINUS:    img_idx.x--; break;
@@ -166,7 +164,7 @@ template <typename T> __global__ void cudaForwardKernel(
             t = last_t_x;
         } else { //Vertical crossing
             last_t_y += delta_t_y;
-            sinogram[batch_idx][0][theta_idx][position_idx] += (last_t_y-t)*image[batch_idx][0][img_idx.y][img_idx.x];
+            matrix[theta_idx][position_idx][img_idx.y][img_idx.x] += last_t_y-t;
             //Modify img_idx
             switch(curr_case) {
                 case Case::TOP_MINUS:    img_idx.y--; break;
@@ -181,26 +179,25 @@ template <typename T> __global__ void cudaForwardKernel(
     }
 }
 
-torch::Tensor cudaForward(const torch::Tensor image, const torch::Tensor thetas, const torch::Tensor positions) {
-    const dim3 threads(8, 8, 2);
+torch::Tensor cudaMatrix(const torch::Tensor image, const torch::Tensor thetas, const torch::Tensor positions) {
+    const dim3 threads(16, 16, 1);
     const dim3 blocks(
         ceil(positions.sizes()[0]/static_cast<float>(threads.x)), 
         ceil(thetas.sizes()[0]/static_cast<float>(threads.y)), 
-        ceil(image.sizes()[0]/static_cast<float>(threads.z))
+        1
     );
-    torch::Tensor sinogram = torch::zeros({image.sizes()[0], 1, thetas.sizes()[0], positions.sizes()[0]}, c10::TensorOptions(torch::kCUDA));
-    AT_DISPATCH_FLOATING_TYPES(image.scalar_type(), "radon_cudaForward", ([&] {
-            cudaForwardKernel<scalar_t><<<blocks, threads>>>(
-                image.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
+    torch::Tensor matrix = torch::zeros({thetas.sizes()[0], positions.sizes()[0], image.sizes()[0], image.sizes()[0]}, c10::TensorOptions(torch::kCUDA));
+    AT_DISPATCH_FLOATING_TYPES(image.scalar_type(), "radon_cudaMatrix", ([&] {
+            cudaMatrixKernel<scalar_t><<<blocks, threads>>>(
+                image.packed_accessor32<scalar_t,2,torch::RestrictPtrTraits>(),
                 thetas.packed_accessor32<scalar_t,1,torch::RestrictPtrTraits>(),
                 positions.packed_accessor32<scalar_t,1,torch::RestrictPtrTraits>(),
-                sinogram.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
+                matrix.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
                 image.sizes()[0],
-                image.sizes()[2],
                 thetas.sizes()[0],
                 positions.sizes()[0]
             );
         })
     );
-    return sinogram;
+    return matrix.reshape({-1, image.sizes()[0]*image.sizes()[0]});
 }

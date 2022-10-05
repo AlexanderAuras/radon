@@ -15,11 +15,11 @@ def radon_forward(image: torch.Tensor, thetas: torch.Tensor|None = None, positio
     assert image.shape[2] == image.shape[3], "'image' must be square"
 
     if thetas == None:
-        thetas = torch.linspace(0.0, 3.14159265359, 257, device=image.device)[:-1]
+        thetas = torch.linspace(0.0, torch.pi, 257, device=image.device)[:-1]
     assert thetas.is_contiguous(), "'thetas' must be contiugous"
     assert thetas.dtype == torch.float32, "'thetas' must be a float32 tensor"
     assert thetas.dim() == 1, "'thetas' must have one dimension"
-    thetas %= 6.28318530718
+    thetas %= 2.0*torch.pi
 
     if positions == None:
         M = ceil(image.shape[2]*1.41421356237/2.0)
@@ -42,7 +42,7 @@ def radon_backward(sinogram: torch.Tensor, image_size: int, thetas: torch.Tensor
     assert sinogram.shape[1] == 1, "'sinogram' must have exactly one channel"
 
     if thetas == None:
-        thetas = torch.linspace(0.0, 3.14159265359, 257, device=sinogram.device)[:-1]
+        thetas = torch.linspace(0.0, torch.pi, 257, device=sinogram.device)[:-1]
     assert thetas.is_contiguous(), "'thetas' must be contiugous"
     assert thetas.dtype == torch.float32, "'thetas' must be a float32 tensor"
     assert thetas.dim() == 1, "'thetas' must have one dimension"
@@ -61,3 +61,31 @@ def radon_backward(sinogram: torch.Tensor, image_size: int, thetas: torch.Tensor
     if sinogram.is_cuda:
         return _impl.cuda_backward(sinogram, thetas, positions, image_size)
     return _impl.cpu_backward(sinogram, thetas, positions, image_size)
+
+
+
+
+def radon_matrix(image: torch.Tensor, thetas: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> torch.Tensor:
+    assert image.is_contiguous(), "'image' must be contiugous"
+    assert image.dtype == torch.float32, "'image' must be a float32 tensor"
+    assert image.dim() == 2, "'image' must have two dimensions [H,W]"
+    assert image.shape[0] == image.shape[1], "'image' must be square"
+
+    if thetas == None:
+        thetas = torch.linspace(0.0, torch.pi, 257, device=image.device)[:-1]
+    assert thetas.is_contiguous(), "'thetas' must be contiugous"
+    assert thetas.dtype == torch.float32, "'thetas' must be a float32 tensor"
+    assert thetas.dim() == 1, "'thetas' must have one dimension"
+    thetas %= 2.0*torch.pi
+
+    if positions == None:
+        M = ceil(image.shape[0]*1.41421356237/2.0)
+        positions = torch.arange(-M, M+1, device=image.device).to(torch.float32)
+    assert positions.is_contiguous(), "'positions' must be contiugous"
+    assert positions.dtype == torch.float32, "'positions' must be a float32 tensor"
+    assert positions.dim() == 1, "'positions' must have one dimension"
+
+    assert image.is_cuda == positions.is_cuda and positions.is_cuda == thetas.is_cuda, "All tensors must be on the same device"
+    if image.is_cuda:
+        return _impl.cuda_matrix(image, thetas, positions)
+    return _impl.cpu_matrix(image, thetas, positions)

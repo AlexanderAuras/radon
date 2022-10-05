@@ -33,14 +33,14 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
 
     const float M_half      = image_tensor.sizes()[3]/2.0f;
     const float grid_offset = fmodf(M_half, 1.0f);
-    #pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(3)
     for(int32_t batch_idx = 0; batch_idx < image_tensor.sizes()[0]; batch_idx++) {
         for(uint32_t theta_idx = 0; theta_idx < thetas_tensor.sizes()[0]; theta_idx++) {
-            const float theta0    = thetas[theta_idx];
-            const float theta     = fmodf(theta0,PI);
-            const float delta_t_x = fabsf(1.0f/sinf(theta));
-            const float delta_t_y = fabsf(1.0f/cosf(theta));
             for(uint32_t position_idx = 0; position_idx < positions_tensor.sizes()[0]; position_idx++) {
+                const float theta0    = thetas[theta_idx];
+                const float theta     = fmodf(theta0,PI);
+                const float delta_t_x = fabsf(1.0f/sinf(theta));
+                const float delta_t_y = fabsf(1.0f/cosf(theta));
                 const float pos    = positions[position_idx];
                 const Vec2f left   = {-M_half, LINE_OF_X(pos, theta0, -M_half)};
                 const Vec2f right  = { M_half, LINE_OF_X(pos, theta0,  M_half)};
@@ -73,7 +73,7 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                     }
                     continue;
                 } else if(fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
-                    if(-M_half <= pos && pos < M_half) {
+                    if(-M_half <= -pos && -pos < M_half) {
                         for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
                             if(-M_half < -pos) {
                                 sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half-0.5f))];
@@ -83,7 +83,7 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
                     }
                     continue;
                 } else if(fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
-                    if(-M_half <= pos && pos < M_half) {
+                    if(-M_half <= -pos && -pos < M_half) {
                         for(uint32_t i = 0; i < image_tensor.sizes()[3]; i++) {
                             if(-M_half < -pos) {
                                 sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half-0.5f))][i];
@@ -177,5 +177,5 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
             }
         } 
     }
-    return sinogram_tensor;
+    return sinogram_tensor/image_tensor.sizes()[3];
 }
