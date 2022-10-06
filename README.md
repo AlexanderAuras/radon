@@ -19,8 +19,7 @@ The base package requires only `pytorch` and a C++ compiler (`c++` on Unix/Linux
 
 To build:
  1. Clone the github repository via `git clone https://github.com/AlexanderAuras/radon.git`
- 2. Change into the install directory and run `python -m build` to build the package
- 2. Lastly run `pip install .` to install the package
+ 2. Change into the project directory and run run `pip install .` to install the package
 
 ## Roadmap:
  - PyPI/conda package
