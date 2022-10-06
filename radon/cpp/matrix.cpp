@@ -34,8 +34,8 @@ torch::Tensor cpuMatrix(const torch::Tensor image_tensor, const torch::Tensor th
     const float M_half      = image_tensor.sizes()[0]/2.0f;
     const float grid_offset = fmodf(M_half, 1.0f);
     #pragma omp parallel for collapse(2)
-    for(uint32_t theta_idx = 0; theta_idx < thetas_tensor.sizes()[0]; theta_idx++) {
-        for(uint32_t position_idx = 0; position_idx < positions_tensor.sizes()[0]; position_idx++) {
+    for(int32_t theta_idx = 0; theta_idx < thetas_tensor.sizes()[0]; theta_idx++) {
+        for(int32_t position_idx = 0; position_idx < positions_tensor.sizes()[0]; position_idx++) {
             const float theta0    = thetas[theta_idx];
             const float theta     = fmodf(theta0,PI);
             const float delta_t_x = fabsf(1.0f/sinf(theta));
