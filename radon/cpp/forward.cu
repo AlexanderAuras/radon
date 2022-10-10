@@ -47,10 +47,10 @@ template <typename T> __global__ void cudaForwardKernel(
     const float delta_t_y   = fabsf(1.0f/cosf(theta));
             
     const float pos    = positions[position_idx];
-    const Vec2f left   = {-M_half, LINE_OF_X(pos, theta0, -M_half)};
-    const Vec2f right  = { M_half, LINE_OF_X(pos, theta0,  M_half)};
-    const Vec2f bottom = {LINE_OF_Y(pos, theta0, -M_half), -M_half};
-    const Vec2f top    = {LINE_OF_Y(pos, theta0,  M_half),  M_half};
+    Vec2f left   = {-M_half, LINE_OF_X(pos, theta0, -M_half)};
+    Vec2f right  = { M_half, LINE_OF_X(pos, theta0,  M_half)};
+    Vec2f bottom = {LINE_OF_Y(pos, theta0, -M_half), -M_half};
+    Vec2f top    = {LINE_OF_Y(pos, theta0,  M_half),  M_half};
     float t            = 0.0f;
     float last_t_x     = 0.0f;
     float last_t_y     = 0.0f;
@@ -101,12 +101,15 @@ template <typename T> __global__ void cudaForwardKernel(
 
     //Calculate case
     Case curr_case = Case::TOP_PLUS;
-    if(-M_half <= top.x && top.x < M_half) {
+    if(-M_half-FLOAT_CMP_THRESHOLD <= top.x && top.x < M_half+FLOAT_CMP_THRESHOLD) {
         curr_case = theta<PI_HALF?Case::TOP_PLUS:Case::TOP_MINUS;
-    } else if(-M_half <= left.y && left.y < M_half) {
+        top.x = CLAMP(top.x, -M_half, M_half);
+    } else if(-M_half-FLOAT_CMP_THRESHOLD <= left.y && left.y < M_half+FLOAT_CMP_THRESHOLD) {
         curr_case = theta>PI_HALF?Case::LEFT_PLUS:Case::LEFT_MINUS;
-    } else if(-M_half <= bottom.x && bottom.x < M_half) {
+        left.y = CLAMP(left.y, -M_half, M_half);
+    } else if(-M_half-FLOAT_CMP_THRESHOLD <= bottom.x && bottom.x < M_half+FLOAT_CMP_THRESHOLD) {
         curr_case = theta>PI_HALF?Case::BOTTOM_PLUS:Case::BOTTOM_MINUS;
+        bottom.x = CLAMP(bottom.x, -M_half, M_half);
     } else {
         return;
     }

@@ -22,9 +22,8 @@ To build:
  2. Change into the project directory and run `pip install .` to install the package
 
 ## Roadmap:
+ - Change radon_matrix signature (Replace img with img_size)
  - PyPI/conda package
- - FIX: Find reason for difference to `torch_radon`
- - FIX: Find reason for pattern in cube reconstruction which does not exist with `torch_radon`
  - Support for different floating types
  - FIX: Remove duplicate code
  - Better detection of CUDA block size
@@ -33,6 +32,8 @@ To build:
  - FIX: Normalization
 
 ## Finished:
+ - ~~FIX: Find reason for pattern in cube reconstruction which does not exist with `torch_radon`~~
+ - ~~FIX: Find reason for difference to `torch_radon`~~
  - ~~Fix CUDA backward bug~~
  - ~~Generate transform matrix~~
  - ~~Filtering as `nn.module`~~
