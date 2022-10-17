@@ -8,9 +8,9 @@ import torch
 import torch.utils.cpp_extension
 
 if sys.platform == "win32":
-    _compiler = os.environ.get("CXX", "cl")
+    _compiler = os.path.basename(os.environ.get("CXX", "cl"))
 else:
-    _compiler = os.environ.get("CXX", "g++")
+    _compiler = os.path.basename(os.environ.get("CXX", "g++"))
 _sources = ["radon.cpp", "forward.cpp", "backward.cpp", "matrix.cpp"]
 _cflags = [{"g++": "-fopenmp", "cl": "/openmp"}[_compiler]]
 if torch.cuda.is_available():
