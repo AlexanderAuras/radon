@@ -47,20 +47,28 @@ template <typename T> __global__ void cudaBackwardKernel(
     const float delta_t_y   = fabsf(1.0f/cosf(theta));
             
     const float pos    = positions[position_idx];
-    const Vec2f left   = {-M_half, LINE_OF_X(pos, theta0, -M_half)};
-    const Vec2f right  = { M_half, LINE_OF_X(pos, theta0,  M_half)};
-    const Vec2f bottom = {LINE_OF_Y(pos, theta0, -M_half), -M_half};
-    const Vec2f top    = {LINE_OF_Y(pos, theta0,  M_half),  M_half};
+    Vec2f left   = {-M_half, LINE_OF_X(pos, theta0, -M_half)};
+    Vec2f right  = { M_half, LINE_OF_X(pos, theta0,  M_half)};
+    Vec2f bottom = {LINE_OF_Y(pos, theta0, -M_half), -M_half};
+    Vec2f top    = {LINE_OF_Y(pos, theta0,  M_half),  M_half};
     float t            = 0.0f;
     float last_t_x     = 0.0f;
     float last_t_y     = 0.0f;
     Vec2i img_idx      = {};
 
+    if(fabsf(theta0) < FLOAT_CMP_THRESHOLD || fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
+        left.y  = std::numeric_limits<float>::infinity();
+        right.y = std::numeric_limits<float>::infinity();
+    } else if(fabsf(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD || fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
+        bottom.x = std::numeric_limits<float>::infinity();
+        top.x    = std::numeric_limits<float>::infinity();
+    }
+
     //Edge-cases for ϑ=0 and ϑ=π/2
-    if(fabsf(theta0) < FLOAT_CMP_THRESHOLD) {
+    /*if(fabsf(theta0) < FLOAT_CMP_THRESHOLD) {
         if(-M_half <= pos && pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
-                if(-M_half < pos) {
+                if(-M_half+0.5f < pos) {
                     atomicAdd(&image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
                 }
                 atomicAdd(&image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
@@ -70,7 +78,7 @@ template <typename T> __global__ void cudaBackwardKernel(
     } else if(fabsf(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD) {
         if(-M_half <= pos && pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
-                if(-M_half < pos) {
+                if(-M_half+0.5f < pos) {
                     atomicAdd(&image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
                 }
                 atomicAdd(&image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
@@ -80,7 +88,7 @@ template <typename T> __global__ void cudaBackwardKernel(
     } else if(fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
         if(-M_half <= -pos && -pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
-                if(-M_half < -pos) {
+                if(-M_half+0.5f < -pos) {
                     atomicAdd(&image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half-0.5f))], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
                 }
                 atomicAdd(&image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half))], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
@@ -90,14 +98,14 @@ template <typename T> __global__ void cudaBackwardKernel(
     } else if(fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
         if(-M_half <= -pos && -pos < M_half) {
             for(uint32_t i = 0; i < image_size; i++) {
-                if(-M_half < -pos) {
+                if(-M_half+0.5f < -pos) {
                     atomicAdd(&image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half-0.5f))][i], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
                 }
                 atomicAdd(&image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half))][i], 0.5f*sinogram[batch_idx][0][theta_idx][position_idx]);
             }
         }
         return;
-    }
+    }*/
 
     //Calculate case
     Case curr_case = Case::TOP_PLUS;
@@ -112,7 +120,6 @@ template <typename T> __global__ void cudaBackwardKernel(
     }
 
     //Init last_t_x, last_t_y
-    // Check again
     switch(curr_case) {
         case Case::TOP_MINUS:    last_t_y = 0.0f; last_t_x = -(ceilf(top.x+grid_offset)-grid_offset-top.x)/sinf(theta); break;
         case Case::TOP_PLUS:     last_t_y = 0.0f; last_t_x =  (floorf(top.x+grid_offset)-grid_offset-top.x)/sinf(theta); break;
@@ -120,6 +127,11 @@ template <typename T> __global__ void cudaBackwardKernel(
         case Case::LEFT_PLUS:    last_t_x = 0.0f; last_t_y = -(floorf(left.y+grid_offset)-grid_offset-left.y)/cosf(theta); break;
         case Case::BOTTOM_MINUS: last_t_y = 0.0f; last_t_x = -(ceilf(bottom.x+grid_offset)-grid_offset-bottom.x)/sinf(theta); break;
         case Case::BOTTOM_PLUS:  last_t_y = 0.0f; last_t_x =  (floorf(bottom.x+grid_offset)-grid_offset-bottom.x)/sinf(theta); break;
+    }
+    if(fabsf(theta0) < FLOAT_CMP_THRESHOLD || fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
+        last_t_x = std::numeric_limits<float>::infinity();
+    } else if(fabsf(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD || fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
+        last_t_y = std::numeric_limits<float>::infinity();
     }
 
     //Init img_idx
