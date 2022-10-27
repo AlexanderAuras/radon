@@ -188,16 +188,16 @@ torch::Tensor cudaMatrix(const torch::Tensor image, const torch::Tensor thetas, 
     );
     torch::Tensor matrix = torch::zeros({thetas.sizes()[0], positions.sizes()[0], image.sizes()[0], image.sizes()[0]}, c10::TensorOptions(torch::kCUDA));
     AT_DISPATCH_FLOATING_TYPES(image.scalar_type(), "radon_cudaMatrix", ([&] {
-            cudaMatrixKernel<scalar_t><<<blocks, threads>>>(
-                image.packed_accessor32<scalar_t,2,torch::RestrictPtrTraits>(),
-                thetas.packed_accessor32<scalar_t,1,torch::RestrictPtrTraits>(),
-                positions.packed_accessor32<scalar_t,1,torch::RestrictPtrTraits>(),
-                matrix.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
+            cudaMatrixKernel<float><<<blocks, threads>>>(
+                image.packed_accessor32<float,2,torch::RestrictPtrTraits>(),
+                thetas.packed_accessor32<float,1,torch::RestrictPtrTraits>(),
+                positions.packed_accessor32<float,1,torch::RestrictPtrTraits>(),
+                matrix.packed_accessor32<float,4,torch::RestrictPtrTraits>(),
                 image.sizes()[0],
                 thetas.sizes()[0],
                 positions.sizes()[0]
             );
         })
     );
-    return matrix.reshape({-1, image.sizes()[0]*image.sizes()[0]});
+    return (matrix/image.sizes()[0]).reshape({-1, image.sizes()[0]*image.sizes()[0]});
 }
