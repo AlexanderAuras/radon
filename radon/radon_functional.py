@@ -1,4 +1,5 @@
 from math import ceil
+import typing
 
 import torch
 import torch.utils.cpp_extension
@@ -7,7 +8,7 @@ from radon.radon_impl import _impl
 
 
 
-def radon_forward(image: torch.Tensor, thetas: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> torch.Tensor:
+def radon_forward(image: torch.Tensor, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> torch.Tensor:
     assert image.is_contiguous(), "'image' must be contiugous"
     assert image.dtype == torch.float32, "'image' must be a float32 tensor"
     assert image.dim() == 4, "'image' must have four dimensions [B,C,H,W]"
@@ -35,7 +36,7 @@ def radon_forward(image: torch.Tensor, thetas: torch.Tensor|None = None, positio
 
 
 
-def radon_backward(sinogram: torch.Tensor, image_size: int, thetas: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> torch.Tensor:
+def radon_backward(sinogram: torch.Tensor, image_size: int, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> torch.Tensor:
     assert sinogram.is_contiguous(), "'sinogram' must be contiugous"
     assert sinogram.dtype == torch.float32, "'sinogram' must be a float32 tensor"
     assert sinogram.dim() == 4, "'sinogram' must have four dimensions [B,C,H,W]"
@@ -65,7 +66,7 @@ def radon_backward(sinogram: torch.Tensor, image_size: int, thetas: torch.Tensor
 
 
 
-def radon_matrix(image: torch.Tensor, thetas: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> torch.Tensor:
+def radon_matrix(image: torch.Tensor, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> torch.Tensor:
     assert image.is_contiguous(), "'image' must be contiugous"
     assert image.dtype == torch.float32, "'image' must be a float32 tensor"
     assert image.dim() == 2, "'image' must have two dimensions [H,W]"

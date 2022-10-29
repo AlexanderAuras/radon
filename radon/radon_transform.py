@@ -9,7 +9,7 @@ from radon.radon_functional import radon_forward, radon_backward
 
 class RadonForwardFunc(torch.autograd.Function):
     @staticmethod
-    def forward(ctx: typing.Any, image: torch.Tensor, thetas: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> torch.Tensor:
+    def forward(ctx: typing.Any, image: torch.Tensor, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> torch.Tensor:
         ctx.thetas = thetas
         ctx.positions = positions
         ctx.image_size = image.shape[2]
@@ -32,7 +32,7 @@ class RadonForwardFunc(torch.autograd.Function):
 
 
 class RadonForward(torch.nn.Module):
-    def __init__(self, thetas: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> None:
+    def __init__(self, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> None:
         super().__init__()
         self.thetas = torch.nn.parameter.Parameter(thetas, requires_grad=False) if thetas!=None else None
         self.positions = torch.nn.parameter.Parameter(positions, requires_grad=False) if positions!=None else None
@@ -44,7 +44,7 @@ class RadonForward(torch.nn.Module):
 
 class RadonBackwardFunc(torch.autograd.Function):
     @staticmethod
-    def forward(ctx: typing.Any, sinogram: torch.Tensor, image_size: int, thetas: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> torch.Tensor:
+    def forward(ctx: typing.Any, sinogram: torch.Tensor, image_size: int, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> torch.Tensor:
         ctx.image_size = image_size
         ctx.thetas = thetas
         ctx.positions = positions
@@ -67,7 +67,7 @@ class RadonBackwardFunc(torch.autograd.Function):
 
 
 class RadonBackward(torch.nn.Module):
-    def __init__(self, image_size: int, thetas: torch.Tensor|None = None, positions: torch.Tensor|None = None) -> None:
+    def __init__(self, image_size: int, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> None:
         super().__init__()
         self.image_size = torch.nn.parameter.Parameter(torch.tensor(image_size), requires_grad=False)
         self.thetas = torch.nn.parameter.Parameter(thetas, requires_grad=False) if thetas!=None else None
