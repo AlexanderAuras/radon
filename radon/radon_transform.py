@@ -21,7 +21,7 @@ class RadonForwardFunc(torch.autograd.Function):
         return radon_forward(*args)
 
     @staticmethod
-    def backward(ctx: typing.Any, grad_output: torch.Tensor) -> tuple[torch.Tensor, None, None]:
+    def backward(ctx: typing.Any, grad_output: torch.Tensor) -> typing.Tuple[torch.Tensor, None, None]:
         args = [grad_output.contiguous(), ctx.image_size]
         if ctx.thetas != None:
             args.append(ctx.thetas)
@@ -56,7 +56,7 @@ class RadonBackwardFunc(torch.autograd.Function):
         return radon_backward(*args)
 
     @staticmethod
-    def backward(ctx: typing.Any, grad_output: torch.Tensor) -> tuple[torch.Tensor, None, None, None]:
+    def backward(ctx: typing.Any, grad_output: torch.Tensor) -> typing.Tuple[torch.Tensor, None, None, None]:
         args = [grad_output.contiguous()]
         if ctx.thetas != None:
             args.append(ctx.thetas)
