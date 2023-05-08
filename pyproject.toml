@@ -6,15 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "radon"
 version = "1.0.0"
 dependencies = [
-    "torch>='1.12.1'"
+    "torch >= 1.12.1"
 ]
 
 [project.optional-dependencies]
 examples = [
-    "notebook>='6.4.12'",
-    "torchvision>='0.13.1'",
-    "matplotlib>='3.5.3'",
-    "torch_radon>='1.0.0'"
+    "notebook >= 6.4.12",
+    "torchvision >= 0.13.1",
+    "matplotlib >= 3.5.3",
+    "torch_radon >= 1.0.0"
 ]
 
 [tool.setuptools.package-data]
