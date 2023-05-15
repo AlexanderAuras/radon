@@ -1,3 +1,5 @@
+#include <cstdlib>
+
 #include <torch/extension.h>
 
 #define LINE_OF_X(s,a,x) ((s)-(x)*cosf(a))/sinf(a)
@@ -28,6 +30,7 @@ template <typename T> __global__ void cudaBackwardKernel(
         const torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> thetas,
         const torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> positions,
         torch::PackedTensorAccessor32<T,4,torch::RestrictPtrTraits> image,
+        torch::PackedTensorAccessor32<int32_t,4,torch::RestrictPtrTraits> count,
         const size_t batch_count,
         const size_t image_size,
         const size_t theta_count,
@@ -149,6 +152,7 @@ template <typename T> __global__ void cudaBackwardKernel(
     //March ray
     while(img_idx.x >= 0 && img_idx.x < image_size && img_idx.y >= 0 && img_idx.y < image_size) {
         //Diagonal crossing
+        atomicAdd(&count[batch_idx][0][img_idx.y][img_idx.x], 1);
         if(fabsf(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
             last_t_x += delta_t_x;
             last_t_y += delta_t_y;
@@ -200,13 +204,15 @@ torch::Tensor cudaBackward(const torch::Tensor sinogram, const torch::Tensor the
         ceil(thetas.sizes()[0]/static_cast<float>(threads.y)), 
         ceil(sinogram.sizes()[0]/static_cast<float>(threads.z))
     );
-    torch::Tensor image = torch::zeros({sinogram.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)}, c10::TensorOptions(torch::kCUDA));
+    torch::Tensor image = torch::zeros({sinogram.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)}, torch::TensorOptions(torch::kCUDA));
+    torch::Tensor count = torch::zeros({sinogram.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)}, torch::TensorOptions(torch::kCUDA).dtype(torch::kInt32));
     AT_DISPATCH_FLOATING_TYPES(sinogram.scalar_type(), "radon_cudaBackward", ([&] {
             cudaBackwardKernel<scalar_t><<<blocks, threads>>>(
                 sinogram.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
                 thetas.packed_accessor32<scalar_t,1,torch::RestrictPtrTraits>(),
                 positions.packed_accessor32<scalar_t,1,torch::RestrictPtrTraits>(),
                 image.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
+                count.packed_accessor32<int32_t,4,torch::RestrictPtrTraits>(),
                 sinogram.sizes()[0],
                 image_size,
                 thetas.sizes()[0],
@@ -214,5 +220,5 @@ torch::Tensor cudaBackward(const torch::Tensor sinogram, const torch::Tensor the
             );
         })
     );
-    return image/static_cast<float>(image_size);
+    return (image/(static_cast<float>(image_size)*1.41421356237f))*thetas.sizes()[0]/count;
 }
