@@ -9,6 +9,8 @@ torch::Tensor cudaMatrix(torch::Tensor image, torch::Tensor thetas, torch::Tenso
 torch::Tensor cpuForward(torch::Tensor image, torch::Tensor thetas, torch::Tensor positions);
 torch::Tensor cpuBackward(torch::Tensor sinogram, torch::Tensor thetas, torch::Tensor distances, size_t image_size);
 torch::Tensor cpuMatrix(torch::Tensor image, torch::Tensor thetas, torch::Tensor positions);
+//torch::Tensor matrixBackward(torch::Tensor sino, torch::Tensor thetas, torch::Tensor positions, size_t image_size);
+//torch::Tensor matrixForward(torch::Tensor image, torch::Tensor thetas, torch::Tensor positions);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, module) {
     #ifdef RADON_CUDA_AVAILABLE
@@ -19,4 +21,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, module) {
     module.def("cpu_forward", &cpuForward);
     module.def("cpu_backward", &cpuBackward);
     module.def("cpu_matrix", &cpuMatrix);
+    //module.def("matrix_backward", &matrixBackward);
+    //module.def("matrix_forward", &matrixForward);
 }

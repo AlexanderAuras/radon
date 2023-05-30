@@ -30,7 +30,7 @@ template <typename T> __global__ void cudaBackwardKernel(
         const torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> thetas,
         const torch::PackedTensorAccessor32<T,1,torch::RestrictPtrTraits> positions,
         torch::PackedTensorAccessor32<T,4,torch::RestrictPtrTraits> image,
-        torch::PackedTensorAccessor32<int32_t,4,torch::RestrictPtrTraits> count,
+        torch::PackedTensorAccessor32<T,4,torch::RestrictPtrTraits> sum,
         const size_t batch_count,
         const size_t image_size,
         const size_t theta_count,
@@ -112,11 +112,11 @@ template <typename T> __global__ void cudaBackwardKernel(
 
     //Calculate case
     Case curr_case = Case::TOP_PLUS;
-    if(-M_half <= top.x && top.x < M_half) {
+    if(-M_half-FLOAT_CMP_THRESHOLD <= top.x && top.x < M_half+FLOAT_CMP_THRESHOLD) {
         curr_case = theta<PI_HALF?Case::TOP_PLUS:Case::TOP_MINUS;
-    } else if(-M_half <= left.y && left.y < M_half) {
+    } else if(-M_half-FLOAT_CMP_THRESHOLD <= left.y && left.y < M_half+FLOAT_CMP_THRESHOLD) {
         curr_case = theta>PI_HALF?Case::LEFT_PLUS:Case::LEFT_MINUS;
-    } else if(-M_half <= bottom.x && bottom.x < M_half) {
+    } else if(-M_half-FLOAT_CMP_THRESHOLD <= bottom.x && bottom.x < M_half+FLOAT_CMP_THRESHOLD) {
         curr_case = theta>PI_HALF?Case::BOTTOM_PLUS:Case::BOTTOM_MINUS;
     } else {
         return;
@@ -152,11 +152,11 @@ template <typename T> __global__ void cudaBackwardKernel(
     //March ray
     while(img_idx.x >= 0 && img_idx.x < image_size && img_idx.y >= 0 && img_idx.y < image_size) {
         //Diagonal crossing
-        atomicAdd(&count[batch_idx][0][img_idx.y][img_idx.x], 1);
         if(fabsf(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
             last_t_x += delta_t_x;
             last_t_y += delta_t_y;
             atomicAdd(&image[batch_idx][0][img_idx.y][img_idx.x], (last_t_x-t)*sinogram[batch_idx][0][theta_idx][position_idx]);
+            atomicAdd(&sum[batch_idx][0][img_idx.y][img_idx.x], last_t_x-t);
             //Modify img_idx
             switch(curr_case) {
                 case Case::TOP_MINUS:    img_idx.x--; img_idx.y--; break;
@@ -170,6 +170,7 @@ template <typename T> __global__ void cudaBackwardKernel(
         } else if(last_t_x+delta_t_x < last_t_y+delta_t_y) { //Horizontal crossing
             last_t_x += delta_t_x;
             atomicAdd(&image[batch_idx][0][img_idx.y][img_idx.x], (last_t_x-t)*sinogram[batch_idx][0][theta_idx][position_idx]);
+            atomicAdd(&sum[batch_idx][0][img_idx.y][img_idx.x], last_t_x-t);
             //Modify img_idx
             switch(curr_case) {
                 case Case::TOP_MINUS:    img_idx.x--; break;
@@ -183,6 +184,7 @@ template <typename T> __global__ void cudaBackwardKernel(
         } else { //Vertical crossing
             last_t_y += delta_t_y;
             atomicAdd(&image[batch_idx][0][img_idx.y][img_idx.x], (last_t_y-t)*sinogram[batch_idx][0][theta_idx][position_idx]);
+            atomicAdd(&sum[batch_idx][0][img_idx.y][img_idx.x], last_t_y-t);
             //Modify img_idx
             switch(curr_case) {
                 case Case::TOP_MINUS:    img_idx.y--; break;
@@ -205,14 +207,14 @@ torch::Tensor cudaBackward(const torch::Tensor sinogram, const torch::Tensor the
         ceil(sinogram.sizes()[0]/static_cast<float>(threads.z))
     );
     torch::Tensor image = torch::zeros({sinogram.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)}, torch::TensorOptions(torch::kCUDA));
-    torch::Tensor count = torch::zeros({sinogram.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)}, torch::TensorOptions(torch::kCUDA).dtype(torch::kInt32));
+    torch::Tensor sum = torch::zeros({sinogram.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)}, torch::TensorOptions(torch::kCUDA));
     AT_DISPATCH_FLOATING_TYPES(sinogram.scalar_type(), "radon_cudaBackward", ([&] {
             cudaBackwardKernel<scalar_t><<<blocks, threads>>>(
                 sinogram.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
                 thetas.packed_accessor32<scalar_t,1,torch::RestrictPtrTraits>(),
                 positions.packed_accessor32<scalar_t,1,torch::RestrictPtrTraits>(),
                 image.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
-                count.packed_accessor32<int32_t,4,torch::RestrictPtrTraits>(),
+                sum.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
                 sinogram.sizes()[0],
                 image_size,
                 thetas.sizes()[0],
@@ -220,5 +222,6 @@ torch::Tensor cudaBackward(const torch::Tensor sinogram, const torch::Tensor the
             );
         })
     );
-    return (image/(static_cast<float>(image_size)*1.41421356237f))*thetas.sizes()[0]/count;
+    return (image/(static_cast<float>(image_size)*1.41421356237f));//*thetas.sizes()[0]/sum;
+    //return PI * image / (static_cast<float>(thetas.sizes()[0]));
 }

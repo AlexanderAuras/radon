@@ -11,7 +11,7 @@ if sys.platform == "win32":
     _compiler = os.path.basename(os.environ.get("CXX", "cl"))
 else:
     _compiler = os.path.basename(os.environ.get("CXX", "g++"))
-_sources = ["radon.cpp", "forward.cpp", "backward.cpp", "matrix.cpp"]
+_sources = ["radon.cpp", "forward.cpp", "backward.cpp", "matrix.cpp"]#, "matrix_bwd.cpp", "matrix_fwd.cpp"]
 _cflags = [{"g++": "-fopenmp", "cl": "/openmp"}[_compiler]]
 _ldflags = None
 #_ldflags = ['/LIBPATH:C:\\Users\\danil\\AppData\\Local\\Programs\\Python\\Python39\\libs'] 
