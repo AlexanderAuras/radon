@@ -1,15 +1,17 @@
 #include <torch/extension.h>
 
-#define LINE_OF_X(s,a,x) ((s)-(x)*cosf(a))/sinf(a)
-#define LINE_OF_Y(s,a,y) ((s)-(y)*sinf(a))/cosf(a)
-#define PI 3.14159265359f
-#define PI_HALF 1.57079632679f
-#define FLOAT_CMP_THRESHOLD 0.001f
+#include "dyn_type_math.hpp"
+
+#define LINE_OF_X(T,s,a,x) ((s)-(x)*DynTypeMath<T>::cos(a))/DynTypeMath<T>::sin(a)
+#define LINE_OF_Y(T,s,a,y) ((s)-(y)*DynTypeMath<T>::sin(a))/DynTypeMath<T>::cos(a)
+#define PI 3.14159265359
+#define PI_HALF 1.57079632679
+#define FLOAT_CMP_THRESHOLD 0.001
 #define CLAMP(x, mi, ma) x<mi?mi:(x<ma?x:ma)
 
-struct Vec2f {
-    float x;
-    float y;
+template<typename T> struct Vec2f {
+    T x;
+    T y;
 };
 
 struct Vec2i {
@@ -39,73 +41,30 @@ template <typename T> __global__ void cudaForwardKernel(
         return;
     }
     
-    const float M_half      = image_size/2.0f;
-    const float grid_offset = fmodf(M_half, 1.0f);
-    const float theta0      = thetas[theta_idx];
-    const float theta       = fmodf(theta0,PI);
-    const float delta_t_x   = fabsf(1.0f/sinf(theta));
-    const float delta_t_y   = fabsf(1.0f/cosf(theta));
+    const T M_half      = image_size/2.0;
+    const T grid_offset = DynTypeMath<T>::mod(M_half, 1.0);
+    const T theta0      = thetas[theta_idx];
+    const T theta       = DynTypeMath<T>::mod(theta0,PI);
+    const T delta_t_x   = DynTypeMath<T>::abs(1.0/DynTypeMath<T>::sin(theta));
+    const T delta_t_y   = DynTypeMath<T>::abs(1.0/DynTypeMath<T>::cos(theta));
             
-    const float pos    = positions[position_idx];
-    Vec2f left   = {-M_half, LINE_OF_X(pos, theta0, -M_half)};
-    Vec2f right  = { M_half, LINE_OF_X(pos, theta0,  M_half)};
-    Vec2f bottom = {LINE_OF_Y(pos, theta0, -M_half), -M_half};
-    Vec2f top    = {LINE_OF_Y(pos, theta0,  M_half),  M_half};
-    float t            = 0.0f;
-    float last_t_x     = 0.0f;
-    float last_t_y     = 0.0f;
+    const T pos    = positions[position_idx];
+    Vec2f<T> left   = {-M_half, LINE_OF_X(T, pos, theta0, -M_half)};
+    Vec2f<T> right  = { M_half, LINE_OF_X(T, pos, theta0,  M_half)};
+    Vec2f<T> bottom = {LINE_OF_Y(T, pos, theta0, -M_half), -M_half};
+    Vec2f<T> top    = {LINE_OF_Y(T, pos, theta0,  M_half),  M_half};
+    T t            = 0.0;
+    T last_t_x     = 0.0;
+    T last_t_y     = 0.0;
     Vec2i img_idx      = {};
 
-    if(fabsf(theta0) < FLOAT_CMP_THRESHOLD || fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
-        left.y  = std::numeric_limits<float>::infinity();
-        right.y = std::numeric_limits<float>::infinity();
-    } else if(fabsf(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD || fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
-        bottom.x = std::numeric_limits<float>::infinity();
-        top.x    = std::numeric_limits<float>::infinity();
+    if(DynTypeMath<T>::abs(theta0) < FLOAT_CMP_THRESHOLD || DynTypeMath<T>::abs(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
+        left.y  = std::numeric_limits<T>::infinity();
+        right.y = std::numeric_limits<T>::infinity();
+    } else if(DynTypeMath<T>::abs(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD || DynTypeMath<T>::abs(theta0 - 3.0*PI_HALF) < FLOAT_CMP_THRESHOLD) {
+        bottom.x = std::numeric_limits<T>::infinity();
+        top.x    = std::numeric_limits<T>::infinity();
     }
-
-    //Edge-cases for ϑ=0 and ϑ=π/2
-    /*if(fabsf(theta0) < FLOAT_CMP_THRESHOLD) {
-        if(-M_half <= pos && pos < M_half) {
-            for(uint32_t i = 0; i < image_size; i++) {
-                if(-M_half+0.5f < pos) {
-                    sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half-0.5f))];
-                }
-                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(pos+M_half))];
-            }
-        }
-        return;
-    } else if(fabsf(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD) {
-        if(-M_half <= pos && pos < M_half) {
-            for(uint32_t i = 0; i < image_size; i++) {
-                if(-M_half+0.5f < pos) {
-                    sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half-0.5f))][i];
-                }
-                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(pos+M_half))][i];
-            }
-        }
-        return;
-    } else if(fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
-        if(-M_half <= -pos && -pos < M_half) {
-            for(uint32_t i = 0; i < image_size; i++) {
-                if(-M_half+0.5f < -pos) {
-                    sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half-0.5f))];
-                }
-                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][i][static_cast<size_t>(floorf(-pos+M_half))];
-            }
-        }
-        return;
-    } else if(fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
-        if(-M_half <= -pos && -pos < M_half) {
-            for(uint32_t i = 0; i < image_size; i++) {
-                if(-M_half+0.5f < -pos) {
-                    sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half-0.5f))][i];
-                }
-                sinogram[batch_idx][0][theta_idx][position_idx] += 0.5f*image[batch_idx][0][static_cast<size_t>(floorf(-pos+M_half))][i];
-            }
-        }
-        return;
-    }*/
 
     //Calculate case
     Case curr_case = Case::TOP_PLUS;
@@ -124,27 +83,27 @@ template <typename T> __global__ void cudaForwardKernel(
 
     //Init last_t_x, last_t_y
     switch(curr_case) {
-        case Case::TOP_MINUS:    last_t_y = 0.0f; last_t_x = -(ceilf(top.x+grid_offset)-grid_offset-top.x)/sinf(theta); break;
-        case Case::TOP_PLUS:     last_t_y = 0.0f; last_t_x =  (floorf(top.x+grid_offset)-grid_offset-top.x)/sinf(theta); break;
-        case Case::LEFT_MINUS:   last_t_x = 0.0f; last_t_y = -(ceilf(left.y+grid_offset)-grid_offset-left.y)/cosf(theta); break;
-        case Case::LEFT_PLUS:    last_t_x = 0.0f; last_t_y = -(floorf(left.y+grid_offset)-grid_offset-left.y)/cosf(theta); break;
-        case Case::BOTTOM_MINUS: last_t_y = 0.0f; last_t_x = -(ceilf(bottom.x+grid_offset)-grid_offset-bottom.x)/sinf(theta); break;
-        case Case::BOTTOM_PLUS:  last_t_y = 0.0f; last_t_x =  (floorf(bottom.x+grid_offset)-grid_offset-bottom.x)/sinf(theta); break;
+        case Case::TOP_MINUS:    last_t_y = 0.0; last_t_x = -(DynTypeMath<T>::ceil(top.x+grid_offset)-grid_offset-top.x)/DynTypeMath<T>::sin(theta); break;
+        case Case::TOP_PLUS:     last_t_y = 0.0; last_t_x =  (DynTypeMath<T>::floor(top.x+grid_offset)-grid_offset-top.x)/DynTypeMath<T>::sin(theta); break;
+        case Case::LEFT_MINUS:   last_t_x = 0.0; last_t_y = -(DynTypeMath<T>::ceil(left.y+grid_offset)-grid_offset-left.y)/DynTypeMath<T>::cos(theta); break;
+        case Case::LEFT_PLUS:    last_t_x = 0.0; last_t_y = -(DynTypeMath<T>::floor(left.y+grid_offset)-grid_offset-left.y)/DynTypeMath<T>::cos(theta); break;
+        case Case::BOTTOM_MINUS: last_t_y = 0.0; last_t_x = -(DynTypeMath<T>::ceil(bottom.x+grid_offset)-grid_offset-bottom.x)/DynTypeMath<T>::sin(theta); break;
+        case Case::BOTTOM_PLUS:  last_t_y = 0.0; last_t_x =  (DynTypeMath<T>::floor(bottom.x+grid_offset)-grid_offset-bottom.x)/DynTypeMath<T>::sin(theta); break;
     }
-    if(fabsf(theta0) < FLOAT_CMP_THRESHOLD || fabsf(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
-        last_t_x = std::numeric_limits<float>::infinity();
-    } else if(fabsf(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD || fabsf(theta0 - 3.0f*PI_HALF) < FLOAT_CMP_THRESHOLD) {
-        last_t_y = std::numeric_limits<float>::infinity();
+    if(DynTypeMath<T>::abs(theta0) < FLOAT_CMP_THRESHOLD || DynTypeMath<T>::abs(theta0 - PI) < FLOAT_CMP_THRESHOLD) {
+        last_t_x = std::numeric_limits<T>::infinity();
+    } else if(DynTypeMath<T>::abs(theta0 - PI_HALF) < FLOAT_CMP_THRESHOLD || DynTypeMath<T>::abs(theta0 - 3.0*PI_HALF) < FLOAT_CMP_THRESHOLD) {
+        last_t_y = std::numeric_limits<T>::infinity();
     }
 
     //Init img_idx
     switch(curr_case) {
-        case Case::TOP_MINUS:    img_idx = {static_cast<int32_t>(floorf(top.x+M_half)), static_cast<int32_t>(image_size-1)}; break;
-        case Case::TOP_PLUS:     img_idx = {static_cast<int32_t>(floorf(top.x+M_half)), static_cast<int32_t>(image_size-1)}; break;
-        case Case::LEFT_MINUS:   img_idx = {0, static_cast<int32_t>(floorf(left.y+M_half))}; break;
-        case Case::LEFT_PLUS:    img_idx = {0, static_cast<int32_t>(floorf(left.y+M_half))}; break;
-        case Case::BOTTOM_MINUS: img_idx = {static_cast<int32_t>(floorf(bottom.x+M_half)), 0}; break;
-        case Case::BOTTOM_PLUS:  img_idx = {static_cast<int32_t>(floorf(bottom.x+M_half)), 0}; break;
+        case Case::TOP_MINUS:    img_idx = {static_cast<int32_t>(DynTypeMath<T>::floor(top.x+M_half)), static_cast<int32_t>(image_size-1)}; break;
+        case Case::TOP_PLUS:     img_idx = {static_cast<int32_t>(DynTypeMath<T>::floor(top.x+M_half)), static_cast<int32_t>(image_size-1)}; break;
+        case Case::LEFT_MINUS:   img_idx = {0, static_cast<int32_t>(DynTypeMath<T>::floor(left.y+M_half))}; break;
+        case Case::LEFT_PLUS:    img_idx = {0, static_cast<int32_t>(DynTypeMath<T>::floor(left.y+M_half))}; break;
+        case Case::BOTTOM_MINUS: img_idx = {static_cast<int32_t>(DynTypeMath<T>::floor(bottom.x+M_half)), 0}; break;
+        case Case::BOTTOM_PLUS:  img_idx = {static_cast<int32_t>(DynTypeMath<T>::floor(bottom.x+M_half)), 0}; break;
     }
     img_idx.x = CLAMP(img_idx.x, 0, image_size-1);
     img_idx.y = CLAMP(img_idx.y, 0, image_size-1);
@@ -152,7 +111,7 @@ template <typename T> __global__ void cudaForwardKernel(
     //March ray
     while(img_idx.x >= 0 && img_idx.x < image_size && img_idx.y >= 0 && img_idx.y < image_size) {
         //Diagonal crossing
-        if(fabsf(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
+        if(DynTypeMath<T>::abs(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
             last_t_x += delta_t_x;
             last_t_y += delta_t_y;
             sinogram[batch_idx][0][theta_idx][position_idx] += (last_t_x-t)*image[batch_idx][0][img_idx.y][img_idx.x];
@@ -211,12 +170,12 @@ torch::Tensor cudaForward(const torch::Tensor image, const torch::Tensor thetas,
                 positions.packed_accessor32<float,1,torch::RestrictPtrTraits>(),
                 sinogram.packed_accessor32<float,4,torch::RestrictPtrTraits>(),
                 image.sizes()[0],
-                image.sizes()[2],
+                image.sizes()[3],
                 thetas.sizes()[0],
                 positions.sizes()[0]
             );
         })
     );
-    return sinogram/(image.sizes()[3]*1.41421356237f);
+    return sinogram/(image.sizes()[3]*1.41421356237);
     //return sinogram / static_cast<float>(positions.sizes()[0]);
 }
