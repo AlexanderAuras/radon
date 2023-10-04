@@ -218,5 +218,4 @@ torch::Tensor cudaForward(const torch::Tensor image, const torch::Tensor thetas,
         })
     );
     return sinogram/(image.sizes()[3]*1.41421356237f);
-    //return sinogram / static_cast<float>(positions.sizes()[0]);
 }

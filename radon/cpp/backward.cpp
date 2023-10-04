@@ -32,8 +32,8 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
     const torch::PackedTensorAccessor32<float,1> positions = positions_tensor.packed_accessor32<float,1>();
     torch::Tensor image_tensor = torch::zeros({sinogram_tensor.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)});
     torch::PackedTensorAccessor32<float,4> image = image_tensor.packed_accessor32<float,4>();
-    torch::Tensor sum_tensor = torch::zeros({sinogram_tensor.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)});
-    torch::PackedTensorAccessor32<float,4> sum = sum_tensor.packed_accessor32<float,4>();
+    torch::Tensor count_tensor = torch::zeros({sinogram_tensor.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)}, torch::TensorOptions(torch::kInt32));
+    torch::PackedTensorAccessor32<int32_t,4> count = count_tensor.packed_accessor32<int,4>();
 
     const float M_half      = image_size/2.0f;
     const float grid_offset = fmodf(M_half, 1.0f);
@@ -116,11 +116,11 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
 
                 //Calculate case
                 Case curr_case = Case::TOP_PLUS;
-                if(-M_half-FLOAT_CMP_THRESHOLD <= top.x && top.x < M_half+FLOAT_CMP_THRESHOLD) {
+                if(-M_half <= top.x && top.x < M_half) {
                     curr_case = theta<PI_HALF?Case::TOP_PLUS:Case::TOP_MINUS;
-                } else if(-M_half-FLOAT_CMP_THRESHOLD <= left.y && left.y < M_half+FLOAT_CMP_THRESHOLD) {
+                } else if(-M_half <= left.y && left.y < M_half) {
                     curr_case = theta>PI_HALF?Case::LEFT_PLUS:Case::LEFT_MINUS;
-                } else if(-M_half-FLOAT_CMP_THRESHOLD <= bottom.x && bottom.x < M_half+FLOAT_CMP_THRESHOLD) {
+                } else if(-M_half <= bottom.x && bottom.x < M_half) {
                     curr_case = theta>PI_HALF?Case::BOTTOM_PLUS:Case::BOTTOM_MINUS;
                 } else {
                     continue;
@@ -156,13 +156,13 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
                 //March ray
                 while(img_idx.x >= 0 && img_idx.x < image_size && img_idx.y >= 0 && img_idx.y < image_tensor.sizes()[2]) {
                     //Diagonal crossing
+                    #pragma omp atomic
+                    count[batch_idx][0][img_idx.y][img_idx.x] += 1;
                     if(fabsf(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
                         last_t_x += delta_t_x;
                         last_t_y += delta_t_y;
                         #pragma omp atomic
                         image[batch_idx][0][img_idx.y][img_idx.x] += (last_t_x-t)*sinogram[batch_idx][0][theta_idx][position_idx];
-                        #pragma omp atomic
-                        sum[batch_idx][0][img_idx.y][img_idx.x] += last_t_x-t;
                         //Modify img_idx
                         switch(curr_case) {
                             case Case::TOP_MINUS:    img_idx.x--; img_idx.y--; break;
@@ -177,8 +177,6 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
                         last_t_x += delta_t_x;
                         #pragma omp atomic
                         image[batch_idx][0][img_idx.y][img_idx.x] += (last_t_x-t)*sinogram[batch_idx][0][theta_idx][position_idx];
-                        #pragma omp atomic
-                        sum[batch_idx][0][img_idx.y][img_idx.x] += last_t_x-t;
                         //Modify img_idx
                         switch(curr_case) {
                             case Case::TOP_MINUS:    img_idx.x--; break;
@@ -193,8 +191,6 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
                         last_t_y += delta_t_y;
                         #pragma omp atomic
                         image[batch_idx][0][img_idx.y][img_idx.x] += (last_t_y-t)*sinogram[batch_idx][0][theta_idx][position_idx];
-                        #pragma omp atomic
-                        sum[batch_idx][0][img_idx.y][img_idx.x] += last_t_y-t;
                         //Modify img_idx
                         switch(curr_case) {
                             case Case::TOP_MINUS:    img_idx.y--; break;
@@ -210,5 +206,5 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
             }
         }
     }
-    return (image_tensor/(static_cast<float>(image_size)*1.41421356237f));//*thetas_tensor.sizes()[0]/sum_tensor;
+    return (image_tensor/(static_cast<float>(image_size)*1.41421356237f))*thetas_tensor.sizes()[0]/count_tensor;
 }

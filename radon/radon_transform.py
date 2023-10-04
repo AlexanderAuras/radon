@@ -9,14 +9,25 @@ from radon.radon_functional import radon_forward, radon_backward
 
 class RadonForwardFunc(torch.autograd.Function):
     @staticmethod
-    def forward(ctx: typing.Any, image: torch.Tensor, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> torch.Tensor: #type: ignore
+    def forward(ctx: typing.Any, image: torch.Tensor, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> torch.Tensor:
+        ctx.thetas = thetas
+        ctx.positions = positions
         ctx.image_size = image.shape[2]
-        ctx.save_for_backward(thetas, positions)
-        return radon_forward(image, thetas, positions)
+        args = [image]
+        if thetas != None:
+            args.append(thetas)
+        if positions != None:
+            args.append(positions)
+        return radon_forward(*args)
 
     @staticmethod
-    def backward(ctx: typing.Any, grad_output: torch.Tensor) -> typing.Tuple[torch.Tensor, None, None]: #type: ignore
-        return radon_backward(grad_output.contiguous(), ctx.image_size, *ctx.saved_tensors), None, None
+    def backward(ctx: typing.Any, grad_output: torch.Tensor) -> typing.Tuple[torch.Tensor, None, None]:
+        args = [grad_output.contiguous(), ctx.image_size]
+        if ctx.thetas != None:
+            args.append(ctx.thetas)
+        if ctx.positions != None:
+            args.append(ctx.positions)
+        return radon_backward(*args), None, None
 
 
 
@@ -33,14 +44,25 @@ class RadonForward(torch.nn.Module):
 
 class RadonBackwardFunc(torch.autograd.Function):
     @staticmethod
-    def forward(ctx: typing.Any, sinogram: torch.Tensor, image_size: int, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> torch.Tensor: #type: ignore
+    def forward(ctx: typing.Any, sinogram: torch.Tensor, image_size: int, thetas: typing.Union[torch.Tensor,None] = None, positions: typing.Union[torch.Tensor,None] = None) -> torch.Tensor:
         ctx.image_size = image_size
-        ctx.save_for_backward(thetas, positions)
-        return radon_backward(sinogram, image_size, thetas, positions)
+        ctx.thetas = thetas
+        ctx.positions = positions
+        args = [sinogram, image_size]
+        if thetas != None:
+            args.append(thetas)
+        if positions != None:
+            args.append(positions)
+        return radon_backward(*args)
 
     @staticmethod
-    def backward(ctx: typing.Any, grad_output: torch.Tensor) -> typing.Tuple[torch.Tensor, None, None, None]: #type: ignore
-        return radon_forward(grad_output.contiguous(), *ctx.saved_tensors), None, None, None
+    def backward(ctx: typing.Any, grad_output: torch.Tensor) -> typing.Tuple[torch.Tensor, None, None, None]:
+        args = [grad_output.contiguous()]
+        if ctx.thetas != None:
+            args.append(ctx.thetas)
+        if ctx.positions != None:
+            args.append(ctx.positions)
+        return radon_forward(*args), None, None, None
 
 
 
