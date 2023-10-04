@@ -192,5 +192,5 @@ torch::Tensor cpuForward(const torch::Tensor image_tensor, const torch::Tensor t
             }
         } 
     }
-    return sinogram_tensor/(image_tensor.sizes()[3]*1.41421356237f);
+    return sinogram_tensor/image_tensor.sizes()[3];
 }

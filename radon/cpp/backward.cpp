@@ -1,5 +1,3 @@
-#include <cstdlib>
-
 #include <torch/extension.h>
 #include <omp.h>
 
@@ -32,8 +30,6 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
     const torch::PackedTensorAccessor32<float,1> positions = positions_tensor.packed_accessor32<float,1>();
     torch::Tensor image_tensor = torch::zeros({sinogram_tensor.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)});
     torch::PackedTensorAccessor32<float,4> image = image_tensor.packed_accessor32<float,4>();
-    torch::Tensor count_tensor = torch::zeros({sinogram_tensor.sizes()[0], 1, static_cast<signed long>(image_size), static_cast<signed long>(image_size)}, torch::TensorOptions(torch::kInt32));
-    torch::PackedTensorAccessor32<int32_t,4> count = count_tensor.packed_accessor32<int,4>();
 
     const float M_half      = image_size/2.0f;
     const float grid_offset = fmodf(M_half, 1.0f);
@@ -156,8 +152,6 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
                 //March ray
                 while(img_idx.x >= 0 && img_idx.x < image_size && img_idx.y >= 0 && img_idx.y < image_tensor.sizes()[2]) {
                     //Diagonal crossing
-                    #pragma omp atomic
-                    count[batch_idx][0][img_idx.y][img_idx.x] += 1;
                     if(fabsf(last_t_x+delta_t_x-last_t_y-delta_t_y) < FLOAT_CMP_THRESHOLD) {
                         last_t_x += delta_t_x;
                         last_t_y += delta_t_y;
@@ -206,5 +200,5 @@ torch::Tensor cpuBackward(const torch::Tensor sinogram_tensor, const torch::Tens
             }
         }
     }
-    return (image_tensor/(static_cast<float>(image_size)*1.41421356237f))*thetas_tensor.sizes()[0]/count_tensor;
+    return image_tensor/static_cast<float>(image_size);
 }
